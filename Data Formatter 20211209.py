@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt #Used to plot scatter plots of waveform data
 import pandas as pd #Used to read csv files
 import seaborn as sns #Used for violin plots
 import time #Used for runtime optimization purposes
-import pathlib #Used for checking if a file exists or not
+#import pathlib #Used for checking if a file exists or not
 import os #Used for checking if a file exists or not
 import sys #Used to exit the program if a known error occurs
 import statistics as stats #Used to calculate stdev and mean values from nparrays
@@ -11,87 +11,121 @@ from scipy.special import erfc #Used for chauvenets criterion
 import getpass #Used to find the current user's username
 
 
-'''Start User Imputted Settings'''
-'Runthrough name'
-RunName = "Medtronic Data 20210806" #run name file 
-#put all excel file folders in ''C:\Users\[user]\Documents\Waveforms\Medronic Tests 20210806'' for RunName = "Medtronic Data 20210806"
-# -Current Run Names-
-# "20210804 Medtronic Manuscript Tests" 
-# "Medtronic Data 20210806"
-# "20210804 Medtronic Manuscript Tests alt" 
+def main():
+    """
+    Main Function for Medtronic Data Formatter
+    Maintainer: Clark Hensley (ch3136)
+    Upstream: https://github.com/ClarkHensley/Medtronic-Data-Formatter
+    """
 
-'Code Settings Parameters'  
-fontsize = 18; plt.rcParams.update({'font.size': int(fontsize)}) #Sets the fonts for plots 
-plottype = 0 #Violin(0) or Bar Graph(1)
-NoiseLevel = 0.1 #Value used if noisy data occurs. Provides a lower value for force values. Only used when curve fitting occurs
-NoiseLimit = 0.1  #Value used if noisy data occurs. Provides a lower limit for force values. Only used when curve fitting occurs
-Show_str = 0 #are average string counts shown
-Show_n = 0 #are n = [testcount] shown
-legendOn = 0 #is the legend shown for waveplots
-timeshift = 75 #amount shifted on the x axis for optimal plot viewing
+    #####
+    #
+    # Constant variables
+    #
+    #####
 
-'Reasonable value limitaions and thresholds'
-Flimit = 3 #Limit for how low the Max Force value can be and still be reasonable
-Flimit2 = 20 #Upper bound limit for a reasonable peak force value
-Alimit = 250 #Limit for how low the Area value can be and still be reasonable
-Slimit = 0 #Limit for how low the slope value can be and still be reasonable
-waveend = 1.5 #What force value is considered below the threshold for the impact duration to be considered finished 
-'''End User Imputted Settings'''
+    # Dataset being tested
+    # TODO take input from a config file (json)
+    curr_dataset = "Medtronic Data 20210806" #run name file 
+    #put all excel file folders in ''C:\Users\[user]\Documents\Waveforms\Medronic Tests 20210806'' for RunName = "Medtronic Data 20210806"
+    # -Current Run Names-
+    # "20210804 Medtronic Manuscript Tests" 
+    # "Medtronic Data 20210806"
+    # "20210804 Medtronic Manuscript Tests alt" 
+    
+    # Output format settings
+    # TODO take input from a config file
+    text_fontsize = 18
+    label_fontsize = 22;
+    title_fontsize = 30;
+    # TODO ??
+    plt.rcParams.update({'font.size': int(text_fontsize)}) #Sets the fonts for plots 
+    plottype = 0 #Violin(0) or Bar Graph(1)
+    NoiseLevel = 0.1 #Value used if noisy data occurs. Provides a lower value for force values. Only used when curve fitting occurs
+    NoiseLimit = 0.1  #Value used if noisy data occurs. Provides a lower limit for force values. Only used when curve fitting occurs
+    Show_str = 0 #are average string counts shown
+    Show_n = 0 #are n = [testcount] shown
+    legendOn = 0 #is the legend shown for waveplots
+    timeshift = 75 #amount shifted on the x axis for optimal plot viewing
+    
+    # Project-Specific Constants
+    # TODO store in a defaults/constants file
+    Flimit = 3 #Limit for how low the Max Force value can be and still be reasonable
+    Flimit2 = 20 #Upper bound limit for a reasonable peak force value
+    Alimit = 250 #Limit for how low the Area value can be and still be reasonable
+    Slimit = 0 #Limit for how low the slope value can be and still be reasonable
+    waveend = 1.5 #What force value is considered below the threshold for the impact duration to be considered finished 
+
+    # Universal Constants
+    # TODO store in a defaults/constants file
+    kN = 4.44822162 #converts voltage to lbf to kN (1V = 1000lbf for our sensor)
+    mVtoa = 1.090 #converts milli-volts to acceleration (1V = 1000lbf for our sensor)
+    Maxav = 10 #What the picoscope range for acceleration was set to (Should stay the same unless another accelerometer is used)
+
+    # Working Directory of this file, all paths will be relative to this:
+    directory = os.path.dirname(os.path.realpath(__file__))
+
+    # Check if the relevant folders and settings files exist. If not, either exit or create them 
+    ensure_folders(directory, curr_dataset)
+
+    
+def ensure_folders(directory, curr_dataset):
+    """
+    Check if the relevant folders exist
+    """
+
+    # Ensure the configuration files exist
+    # TODO move these to a sensible format, maybe delete them What are they for?
+    if not os.path.exists(os.path.join(directory, f"Dataformatter/{curr_dataset}.ini")):
+        sys.exit(f"Error: {curr_dataset}.ini file is not found!\n")
+
+    if not os.path.exists(os.path.join(directory, "Dataformatter/database.ini")):
+        sys.exit(f"Error: database.ini file is not found!\n")
+
+    if not os.path.exists(os.path.join(directory, f"Dataformatter/Data/{curr_dataset}")):
+        os.makedirs(f"Dataformatter/Data/{curr_dataset}")
 
 
-'''Start Analysis Program'''
-'Start of Program Runtime (For Code Optimization)'
-t_i = time.time() #Varible used to note time the script started. Used for runtime optimization purposes
-
-'Initializing Variables to Begin Program Runthrough'
-kN = 4.44822162 #converts voltage to lbf to kN (1V = 1000lbf for our sensor)
-mVtoa = 1.090 #converts milli-volts to acceleration (1V = 1000lbf for our sensor)
-Maxav = 10 #What the picoscope range for acceleration was set to (Should stay the same unless another accelerometer is used)
-
-'Link to Teams Sharepoint Directory' #not in use yet
-#Teams sharepoint file link - https://mstate.sharepoint.com/sites/MSU-MedtronicUseConditionsProgramUserCreated/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008CD6088CCEE3724F9CFFA0F8BC8B1FFA&viewid=9340f526%2D43cb%2D4070%2D9e87%2D9b32769ee004&id=%2Fsites%2FMSU%2DMedtronicUseConditionsProgramUserCreated%2FShared%20Documents%2FGeneral%2F4Python%20Processed%20Data
-
-'Current User`s Username'
-User = getpass.getuser() #Returns the current user's username
-
-'ini File Exists Check'
-Directory = "C://Users//" + User + "//Documents//Waveforms//Dataformater//"
-Errmsg = ""
-filecheck = np.array(['Settings',RunName,'database']) #Test file folder
-if os.path.exists(pathlib.Path(Directory+filecheck[1]+'.ini')) != True: Errmsg = Errmsg + "Err - " + RunName + " File is missing " #can the run file be located
-if os.path.exists(pathlib.Path(Directory+filecheck[2]+'.ini')) != True: Errmsg = Errmsg + "Err - database File is missing " #can the database file be located
-if Errmsg != "": sys.exit(Errmsg) #Error designates that an important file is missing
-
-'Locating/Creating Folder to store Graphs and Strikes'
-WaveFormsfolder = pathlib.Path("C://Users//" + User + "//Documents//Waveforms")
-if os.path.exists(WaveFormsfolder) != True: os.mkdir(WaveFormsfolder) #if folder does not exist create it
-Codefolder = pathlib.Path("C://Users//" + User + "//Documents//Waveforms//Dataformater")
-if os.path.exists(Codefolder) != True: os.mkdir(Codefolder) #if folder does not exist create it
-Datafolder = pathlib.Path("C://Users//" + User + "//Documents//Waveforms//Dataformater//Data")
-if os.path.exists(Datafolder) != True: os.mkdir(Datafolder) #if folder does not exist create it
-Graphfolder = pathlib.Path("C://Users//" + User + "//Documents//Waveforms//Dataformater//Data//" + RunName)
-if os.path.exists(Graphfolder) != True: os.mkdir(Graphfolder) #if folder does not exist create it
-
-'Funtions Used'
-#Plots analysis charts
-def chart(fignum,xarray,yarray,tname,yname,xname,pltt):
+def chart(directory, curr_dataset, fignum, xarray, yarray, tname, yname, xname, pltt, label_fontsize, title_fontsize):
     plt.figure(int(fignum),figsize=(18,10)); plt.title(tname)
-    plt.rc('axes', titlesize=int(fontsize)+12) #fontsize of the title
-    plt.rc('axes', labelsize=int(fontsize)+4) #fontsize of the x and y labels
-    if pltt == 0: sns.violinplot(x=xarray, y=yarray); plt.ylabel(yname); plt.xlabel(xname); plt.tight_layout(); plt.savefig("C://Users//" + User + "//Documents//Waveforms//Dataformater//Data//" + RunName + "//" + tname + " violin graph.png")
-    if pltt == 1: plt.boxplot(x=xarray, y=yarray); plt.ylabel(yname); plt.xlabel(xname); plt.tight_layout(); plt.savefig("C://Users//" + User + "//Documents//Waveforms//Dataformater//Data//" + RunName + "//" + tname + " box graph.png") 
+    plt.rc('axes', titlesize=title_fontsize) #fontsize of the title
+    plt.rc('axes', labelsize=label_fontsize) #fontsize of the x and y labels
+
+    if pltt == 0:
+        sns.violinplot(x=xarray, y=yarray)
+        filename = tname + "-violin-graph.png"
+    else:
+        # TODO ???
+        #plt.boxplot(x=xarray, y=yarray)
+        plt.boxplot(x=xarray, labels=yarray)
+        filename = tname + "-box-graph.png"
+
+    plt.ylabel(yname)
+    plt.xlabel(xname)
+    plt.tight_layout()
+    plt.savefig(os.path.join(directory, f"Dataformatter/Data/{curr_dataset}/{filename}"))
+
     plt.show() 
     
 #Plots waveform scatterpolts    
-Count = np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100])
-def waveplot(fignum,strnum,testnum,incnum,tname,xname,yname,pltt,legend): 
-    plt.figure(int(fignum),figsize=(18,10)); plt.grid(True); plt.tight_layout(); plt.title(tname); plt.ylabel(yname); plt.xlabel(xname)
-    plt.rc('axes', titlesize=int(fontsize)+12) #fontsize of the title
-    plt.rc('axes', labelsize=int(fontsize)+4) #fontsize of the x and y labels
-    if pltt == 0: plt.plot(t_rec[testnum,1:incnum,strnum], F_rec[testnum,1:incnum,strnum], marker='.', label = "Strike " + str(strnum + 1))   
-    if pltt == 1: plt.plot(t_rec[testnum,1:incnum,strnum], a_rec[testnum,1:incnum,strnum], marker='.', label = "Strike " + str(strnum + 1))   
-    if pltt == 2: plt.plot(Count[1:incnum+1], Fmax[testnum,0:incnum], marker='.')
-    if legend == 1: plt.legend(loc = "upper left") 
+def waveplot(fignum,strnum,testnum,incnum,tname,xname,yname,pltt,legend, title_fontsize, label_fontsize): 
+    Count = list(range(0,101))
+    plt.figure(int(fignum),figsize=(18,10))
+    plt.grid(True)
+    plt.tight_layout()
+    plt.title(tname)
+    plt.ylabel(yname)
+    plt.xlabel(xname)
+    plt.rc('axes', titlesize=title_fontsize) #fontsize of the title
+    plt.rc('axes', labelsize=label_fontsize) #fontsize of the x and y labels
+    if pltt == 0:
+        plt.plot(t_rec[testnum,1:incnum,strnum], F_rec[testnum,1:incnum,strnum], marker='.', label = "Strike " + str(strnum + 1))   
+    elif pltt == 1:
+        plt.plot(t_rec[testnum,1:incnum,strnum], a_rec[testnum,1:incnum,strnum], marker='.', label = "Strike " + str(strnum + 1))   
+    elif pltt == 2:
+        plt.plot(Count[1:incnum+1], Fmax[testnum,0:incnum], marker='.')
+    if legend == 1:
+        plt.legend(loc = "upper left")
 
 #Creates an array only containing information to be used in statistical analysis
 def statarray(snum,stattype):
