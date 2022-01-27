@@ -1,3 +1,8 @@
 *.zip
 Dataformater/
 Medtronic*
+
+bin/
+lib/
+lib64
+share/
