@@ -1,8 +1,6 @@
 
-        strike = 0 #start at zero for array indexing simplicity 
+        """strike = 0 #start at zero for array indexing simplicity 
            
-            cond1 = False #Can be the cause of certain errors if set to true
-            
             'Strike analysis loop'        
             x=4 #starting point for data reading in data array
             endloop = False
@@ -17,17 +15,11 @@
 
                 pass1 = True #Used when special conditions are considered in whether the strike data triggers analysis or not
 
-
-
-
-                if cond1 == True:
-                    if float(data[x+300, 1]) < 0.25*float(data[x, 1]): pass1 = False
-
-
+                # TODO !!!!!!!!!!
                 if x >= inc + 10 and pass1 == True and all(data[x-250:x+250, 1] != '5') and all(data[x-250:x+250,1] != 'âˆž') and all(data[x-250:x+250, 1] != '∞') and float(data[x, 1]) >= Flimit/kN and slopecheck >= Slimit: #Data Collection Triggered by 40mV signal occuring  
                     striketriggered = True
                     for n in range(x-inc+shift, x+inc+shift):
-                        
+          """
                         if n <= x+inc+shift and n < int(len(data)) - 1:
                             Array_ct = int(n-(x-inc+shift))
                             t_rec[test][Array_ct][strike] = (float(data[n, 0]) - float(data[int(x-inc+shift), 0]))*mult #t[Array_ct+offset] #Formating Time Units   
