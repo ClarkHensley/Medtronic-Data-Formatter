@@ -118,9 +118,9 @@ def main():
                         force_max_arr = np.zeros([num_tests, 100])
                         init_slope_arr = np.zeros([num_tests, 100])
                         wavelength_arr = np.zeros([num_tests, 100])
-                        # Maintains an Array of True of False if a strike has been rejected
-                        rejection_arr = np.zeros([100])
 
+                        # Maintains an Array of True of False if a strike has been rejected
+                        rejection_arr = [False for _ in range(100)]
                         # Arrays for the means of the above cumulative arrays
                         area_mean_arr = np.zeros([num_tests])
 
@@ -138,18 +138,28 @@ def main():
                 # Constants are handled, time to start analysis
                 # Throw out the first 3 values in data, as that's only used for this set-up
                 data = data[3:]
-                fitting = formatCSV(data, accelerometer_present, settings)
+
+                fitting_arr = [False for _ in range(len(data))]
+
+                formatCSV(data, accelerometer_present, settings, fitting_arr)
 
                 # first 0.75% of the data
-                for ind in range(int(0.75 * len(data)) + 1):
+                for ind, datum in enumerate(data):
+
+                    if ind >= len(data) + 250:
+                        break
+
                     # current slope at this point on the curve
                     curr_slope = (float(data[ind, 1]) - float(data[ind - 1, 1])) / (float(data[ind, 0]) - float(data[ind - 1, 0]))
 
                     # Determines if the strike has occurred
-                    #print(ind, inc, ind >= inc + 10)
-                    #print(float(data[ind, 1]) >= settings["FORCE-LOWER-REASONABLE"] / settings["kN"])
-                    #if ind >= inc + 10 and not ("5" in data[ind - 250:ind + 250, 1]) and float(data[ind, 1]) >= settings["FORCE-LOWER-REASONABLE"]/settings["kN"] and curr_slope >= settings["SLOPE-LOWER-LIMIT"]:
-                    if ind >= inc + 10 and all(data[ind - 250:ind + 250, 1] != "5") and float(data[ind, 1]) >= float(settings["FORCE-LOWER-REASONABLE"] / float(settings["kN"]) and curr_slope >= float(settings["SLOPE-LOWER-LIMIT"])):
+                    no_max = True
+                    for cv in data[ind - 250:ind + 250]:
+                        if "5" in cv:
+                            no_max = False
+                            break
+
+                    if ind >= inc + 10 and no_max and float(data[ind, 1]) >= float(settings["FORCE-LOWER-REASONABLE"] / float(settings["kN"]) and curr_slope >= float(settings["SLOPE-LOWER-LIMIT"])):
                         strike_triggered = True
 
                         # Gather the waveform data
@@ -161,18 +171,16 @@ def main():
                             time_arr[t][n_ind][c] = time_multiple * (float(data[n, 0]) - float(data[n_ind, 0]))
 
                             impact_arr[t][n_ind][c] = float(data[n, 1]) * float(settings["kN"])
-                            print(impact_arr)
-                            print(t, n_ind, c, sep="\t")
 
                             if accelerometer_present:
                                 accel_arr[t][n_ind][c] = float(data[n, 2]) / float(settings["mV_to_a"])
-                                
-                        #Curve-fititng for Force
-                        if fitting:
-                            curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c)
 
-                        # Waveform Characteristics
-                        waveformCharacteristics(settings, time_arr, area_arr, force_max_arr, init_slope_arr, impact_arr, wavelength_arr, inc, ratio, shift, time_delta, t, c)
+                            # Curve-fititng for Force
+                            #if fitting_arr[ind]:
+                                #curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c)
+
+                            # Waveform Characteristics
+                            waveformCharacteristics(settings, time_arr, area_arr, force_max_arr, init_slope_arr, impact_arr, wavelength_arr, inc, ratio, shift, time_delta, t, c)
 
                         # After strike_triggered, we break the inner loop
                         break
@@ -187,126 +195,127 @@ def main():
                     strike_count[t] = c
                     strike_triggered = False
 
-                    # Statistical Analysis for each run
-                    final_strike_ind = 0
-                    for f in range(int(strike_count[t]) + 1):
-                        if force_max_arr[t][f] >= settings["FORCE-LOWER-REASONABLE"] and force_max_arr[t][f] <= settings["FORCE-UPPER-REASONABLE"] and area_arr[t][f] >= settings["AREA-LOWER-LIMIT"]:
-                            area_arr[final_strike_ind] = area_arr[f]
-                            force_max_arr[final_strike_ind] = force_max_arr[f]
-                            init_slope_arr[final_strike_ind] = init_slope_arr[f]
-                            wavelength_arr[final_strike_ind] = wavelength_arr[f]
-                            rejection_arr[f] = False
-                            final_strike_ind += 1
+            # Statistical Analysis for each run
+            final_strike_ind = 0
 
-                        else:
-                            rejection_arr[f] = True
+            for f in range(int(strike_count[t]) + 1):
 
-                    # Calculate statistics
-                    selected_area_arr = area_arr[0:final_strike_ind]
-                    print(selected_area_arr)
-                    selected_force_max_arr = force_max_arr[0:final_strike_ind]
+                if force_max_arr[t][f] >= settings["FORCE-LOWER-REASONABLE"] and force_max_arr[t][f] <= settings["FORCE-UPPER-REASONABLE"] and area_arr[t][f] >= settings["AREA-LOWER-LIMIT"]:
+                    area_arr[final_strike_ind] = area_arr[f]
+                    force_max_arr[final_strike_ind] = force_max_arr[f]
+                    init_slope_arr[final_strike_ind] = init_slope_arr[f]
+                    wavelength_arr[final_strike_ind] = wavelength_arr[f]
+                    rejection_arr[f] = False
+                    final_strike_ind += 1
 
-                    area_mean_arr[t] = stats.mean(selected_area_arr)
-                    area_stdev_arr[t] = stats.stdev(selected_area_arr, area_mean_arr[t])
-                    force_max_mean_arr[t] = stats.mean(selected_force_max_arr)
-                    force_max_stdev_arr[t] = stats.stdev(selected_force_max_arr, force_max_mean_arr[t])
-                    init_slope_mean_arr[t] = stats.mean(init_slope_arr[0:final_strike_ind])
-                    init_slope_stdev_arr[t] = stats.stdev(init_slope_arr[0:final_strike_ind], init_slope_mean_arr[t])
-                    wavelength_mean_arr[t] = stats.mean(wavelength_arr[0:final_strike_ind])
-                    wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:final_strike_ind], wavelength_mean_arr[t])
+                else:
+                    rejection_arr[f] = True
 
-                    # Reject Values based on "Chauvenets and absurdly low values"
-                    # Selected array, len(selected array) maxmean[t] maxstdev[t]
-                    rejected_area_bool = ((erfc(np.abs(selected_area_arr) / area_stdev_arr[t])) > (1 / (2 * len(selected_area_arr))))
-                    rejected_force_max_bool = ((erfc(np.abs(selected_force_max_arr) / force_max_stdev_arr[t])) > (1 / (2 * len(selected_force_max_arr))))
+            # Calculate statistics
+            selected_area_arr = area_arr[0:final_strike_ind]
+            selected_force_max_arr = force_max_arr[0:final_strike_ind]
 
-                    init_rejection_ind = 0
-                    chauv_rejection_ind = 0
+            area_mean_arr[t] = stats.mean(selected_area_arr)
+            area_stdev_arr[t] = stats.stdev(selected_area_arr, area_mean_arr[t])
+            force_max_mean_arr[t] = stats.mean(selected_force_max_arr)
+            force_max_stdev_arr[t] = stats.stdev(selected_force_max_arr, force_max_mean_arr[t])
+            init_slope_mean_arr[t] = stats.mean(init_slope_arr[0:final_strike_ind])
+            init_slope_stdev_arr[t] = stats.stdev(init_slope_arr[0:final_strike_ind], init_slope_mean_arr[t])
+            wavelength_mean_arr[t] = stats.mean(wavelength_arr[0:final_strike_ind])
+            wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:final_strike_ind], wavelength_mean_arr[t])
 
-                    for i in range(0, final_strike_ind):
-                        if rejection_arr[i]:
-                            init_rejection_ind += 1
+            # Reject Values based on "Chauvenets and absurdly low values"
+            # Selected array, len(selected array) maxmean[t] maxstdev[t]
+            rejected_area_bool = ((erfc(np.abs(selected_area_arr) / area_stdev_arr[t])) > (1 / (2 * len(selected_area_arr))))
+            rejected_force_max_bool = ((erfc(np.abs(selected_force_max_arr) / force_max_stdev_arr[t])) > (1 / (2 * len(selected_force_max_arr))))
 
-                        if rejected_area_bool[i] and rejected_force_max_bool[i]:
-                            area_arr[t][chauv_rejection_ind] = area_arr[t][i]
-                            init_slope_arr[t][chauv_rejection_ind] = init_slope_arr[t][i]
-                            wavelength_arr[t][chauv_rejection_ind] = wavelength_arr[t][i]
-                            rejection_arr[i + init_rejection_ind] = False
+            init_rejection_ind = 0
+            chauv_rejection_ind = 0
 
-                            chauv_rejection_ind += 1
+            for i in range(0, final_strike_ind):
+                if rejection_arr[i]:
+                    init_rejection_ind += 1
 
-                            ImpulseData1 = np.vstack([ImpulseData1, [area_arr[t][i],  force_max_arr[t][i], init_slope_arr[t][i], wavelength_arr[t][i]]])
+                if rejected_area_bool[i] and rejected_force_max_bool[i]:
+                    area_arr[t][chauv_rejection_ind] = area_arr[t][i]
+                    init_slope_arr[t][chauv_rejection_ind] = init_slope_arr[t][i]
+                    wavelength_arr[t][chauv_rejection_ind] = wavelength_arr[t][i]
+                    rejection_arr[i + init_rejection_ind] = False
 
-                        else:
-                            print("Rejected Strike: {s}".format(s=i+chauv_rejection_ind+init_rejection_ind))
-                            rejection_arr[i + rejected_area_bool] = True
+                    chauv_rejection_ind += 1
 
-                    for i in range(chauv_rejection_ind):
+                    ImpulseData1 = np.vstack([ImpulseData1, [area_arr[t][i],  force_max_arr[t][i], init_slope_arr[t][i], wavelength_arr[t][i]]])
 
-                        if not rejection_arr[i]:
-                            # TODO should probably be a function
-                            plt.figure("ForcePlot", figsize=(18, 10))
-                            plt.grid(True)
-                            plt.tight_layout()
-                            plt.title(Tests[t])
-                            plt.ylabel("Force (kN)")
-                            plt.xlabel("Time (us)")
+                else:
+                    print("Rejected Strike: {s}".format(s=i+chauv_rejection_ind+init_rejection_ind))
+                    rejection_arr[i + rejected_area_bool] = True
 
-                            plt.rc("axes", titlesize=settings["TITLE-SIZE"])
-                            plt.rc("axes", labelsize=settings["LABEL-SIZE"])
-                            plt.plot(time_arr[t, 1:inc * 2 - 5, i], force_max_arr[t, 1:inc * 2 - 5, i], marker=".", label=f"Strike {str(i + 1)}")
-                            if settings["LEGEND"]:
-                                plt.legend(loc="upper left")
-                            plt.axis([0, 300, 0, 25])
-                            plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-ForcePlot.png".format(d=settings["DATASET"], t=test)))
-                            plt.close("ForcePlot")
+            for i in range(chauv_rejection_ind):
 
-                            if accelerometer_present:
-                                # waveplot(1, strike, test, inc * 2 - 5, Testname[test], "Time (us), "Acceleration (m/s^2), 1, legendOn)
-                                plt.figure("AccelPlot", figsize=(18, 10))
-                                plt.grid(True)
-                                plt.tight_layout()
-                                plt.title(Tests[t])
-                                plt.ylabel("Acceleration (m/s^2)")
-                                plt.xlabel("Time (us)")
-                                plt.rc("axes", titlesize=settings["TITLE-SIZE"])
-                                plt.rc("axes", labelsize=settings["LABEL-SIZE"])
-                                plt.plot(time_arr[t, 1:inc * 2 - 5, c], accel_arr[t, 1:inc * 2 - 5, c], marker=".", label="Strike")
-                                if settings["LEGEND"]:
-                                    plt.legend(loc="upper left")
-                            plt.axis([0, 300, -9, 7])
-                            plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-AccelPlot.png".format(d=settings["DATASET"], t=test)))
-                            plt.close("AccelPlot")
-
-                    # Plot the Peak Force Data
-                    plt.figure("PeakForcePlot", figsize=(18, 10))
+                if not rejection_arr[i]:
+                    # TODO should probably be a function
+                    plt.figure("ForcePlot", figsize=(18, 10))
                     plt.grid(True)
                     plt.tight_layout()
                     plt.title(Tests[t])
                     plt.ylabel("Force (kN)")
-                    plt.xlabel("Stike Count")
-                    # 2
-                    plt.plot(list(range(1, chauv_rejection_ind)), force_max_arr[t, 0:inc * 2 - 5], marker=".")
+                    plt.xlabel("Time (us)")
 
+                    plt.rc("axes", titlesize=settings["TITLE-SIZE"])
+                    plt.rc("axes", labelsize=settings["LABEL-SIZE"])
+                    plt.plot(time_arr[t, 1:inc * 2 - 5, i], force_max_arr[t, 1:inc * 2 - 5, i], marker=".", label=f"Strike {str(i + 1)}")
+                    if settings["LEGEND"]:
+                        plt.legend(loc="upper left")
                     plt.axis([0, 300, 0, 25])
-                    plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-PeakForcePlot".format(d=settings["DATASET"], t=test)))
-                    plt.close("PeakForcePlot")
+                    plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-ForcePlot.png".format(d=settings["DATASET"], t=test)))
+                    plt.close("ForcePlot")
 
-                    # Update Statistics
-                    area_mean_arr[t] = stats.mean(area_arr[0:chauv_rejection_ind])
-                    area_stdev_arr[t] = stats.stdev(area_arr[0:chauv_rejection_ind], area_mean_arr[t])
+                    if accelerometer_present:
+                        # waveplot(1, strike, test, inc * 2 - 5, Testname[test], "Time (us), "Acceleration (m/s^2), 1, legendOn)
+                        plt.figure("AccelPlot", figsize=(18, 10))
+                        plt.grid(True)
+                        plt.tight_layout()
+                        plt.title(Tests[t])
+                        plt.ylabel("Acceleration (m/s^2)")
+                        plt.xlabel("Time (us)")
+                        plt.rc("axes", titlesize=settings["TITLE-SIZE"])
+                        plt.rc("axes", labelsize=settings["LABEL-SIZE"])
+                        plt.plot(time_arr[t, 1:inc * 2 - 5, c], accel_arr[t, 1:inc * 2 - 5, c], marker=".", label="Strike")
+                        if settings["LEGEND"]:
+                            plt.legend(loc="upper left")
+                        plt.axis([0, 300, -9, 7])
+                        plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-AccelPlot.png".format(d=settings["DATASET"], t=test)))
+                        plt.close("AccelPlot")
 
-                    force_max_arr[t] = stats.mean(force_max_arr[0:chauv_rejection_ind])
-                    force_max_stdev_arr = stats.stdev(force_max_arr[0:chauv_rejection_ind], force_max_mean_arr[t])
+            # Plot the Peak Force Data
+            plt.figure("PeakForcePlot", figsize=(18, 10))
+            plt.grid(True)
+            plt.tight_layout()
+            plt.title(Tests[t])
+            plt.ylabel("Force (kN)")
+            plt.xlabel("Stike Count")
+            # 2
+            plt.plot(list(range(1, chauv_rejection_ind)), force_max_arr[t, 0:inc * 2 - 5], marker=".")
 
-                    init_slope_mean_arr = stats.mean(init_slope_arr[0:chauv_rejection_ind])
-                    init_slope_stdev_arr = stats.stdev(init_slope_arr[0:chauv_rejection_ind], init_slope_mean_arr[t])
+            plt.axis([0, 300, 0, 25])
+            plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-PeakForcePlot".format(d=settings["DATASET"], t=test)))
+            plt.close("PeakForcePlot")
 
-                    wavelength_mean_arr[t] = stats.mean(wavelength_arr[0:chauv_rejection_ind])
-                    wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:chauv_rejection_ind], wavelength_mean_arr[t])
+            # Update Statistics
+            area_mean_arr[t] = stats.mean(area_arr[0:chauv_rejection_ind])
+            area_stdev_arr[t] = stats.stdev(area_arr[0:chauv_rejection_ind], area_mean_arr[t])
 
-                    # Increment strike total
-                    strike_total += strike_count[t] + 1
+            force_max_arr[t] = stats.mean(force_max_arr[0:chauv_rejection_ind])
+            force_max_stdev_arr = stats.stdev(force_max_arr[0:chauv_rejection_ind], force_max_mean_arr[t])
+
+            init_slope_mean_arr = stats.mean(init_slope_arr[0:chauv_rejection_ind])
+            init_slope_stdev_arr = stats.stdev(init_slope_arr[0:chauv_rejection_ind], init_slope_mean_arr[t])
+
+            wavelength_mean_arr[t] = stats.mean(wavelength_arr[0:chauv_rejection_ind])
+            wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:chauv_rejection_ind], wavelength_mean_arr[t])
+
+            # Increment strike total
+            strike_total += strike_count[t] + 1
 
         # Outside of while Test
         final_names = []
@@ -371,25 +380,21 @@ def dictFromJson(file):
         sys.exit("{missing_file} JSON file could not be found.".format(missing_file=file))
 
 
-def formatCSV(data, accelerometer_present, settings):
+def formatCSV(data, accelerometer_present, settings, fitting_arr):
     """
     Remove invalid values from the CSV, take care of under- or over-flow errors
     """
-    fitting = False
-
     # Data[0, 1] should always be 0, for some reason
     data[0, 1] = 0
 
     for d, datum in enumerate(data):
         if datum[1] == "âˆž" or datum[1] == "∞":
             data[d, 1] = "5"
-            if not fitting:
-                fitting = True
+            fitting_arr[d] = True
 
         if datum[1] == "-∞" or float(datum[1]) < 0:
             data[d, 1] = "0"
-            if not fitting:
-                fitting = True
+            fitting_arr[d] = True
 
         if accelerometer_present:
             if datum[2] == "âˆž" or datum[2] == "∞":
@@ -397,8 +402,6 @@ def formatCSV(data, accelerometer_present, settings):
 
             if datum[2] == "-∞":
                 data[d, 2] = str(-1 * settings["max_av"])
-
-    return fitting
 
 def curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c):
     delta = (time_arr[t][12][c] - time_arr[t][11][c]) * time_multiple
@@ -427,6 +430,11 @@ def curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c
 
             if i == 2 * inc - 2:
                 end_time = 2 * inc - 1
+                print(t)
+                print(end_time)
+                print(start_time)
+                print(impact_arr)
+                print(time_arr)
                 interpolation_slope = (impact_arr[t][end_time + 1][c] - impact_arr[t][start_time][c]) / (time_arr[t][end_time][c] - time_arr[t][start_time][c])
                 
                 for j in range(start_time, end_time + 1):
@@ -435,7 +443,7 @@ def curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c
                 # TODO eww
                 i = j
 
-        if impact_arr[t][n_ind][c] <= float(settings["FORCE-LOWER-BOUND"]) * float(settings["kN"]):
+        if impact_arr[t][n_ind][c] < float(settings["FORCE-LOWER-BOUND"]) * float(settings["kN"]):
             impact_arr[t][n_ind][c] = float(settings["FORCE-LOWER-BOUND"]) * float(settings["kN"])
 
 
@@ -487,6 +495,7 @@ def createChart(name, x_data, y_data, t_header, x_label, y_label, settings, DF_d
     plt.tight_layout()
     if not os.path.exists(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"]))):
         os.mkdir(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"])))
+    print(os.path.join(DF_directory, "Data/{d}/{fn}".format(d=settings["DATASET"], fn=filename)))
     plt.savefig(os.path.join(DF_directory, "Data/{d}/{fn}".format(d=settings["DATASET"], fn=filename)))
     plt.close(name)
 
