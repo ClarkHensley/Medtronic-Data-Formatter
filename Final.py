@@ -39,8 +39,14 @@ def main():
         os.mkdir(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"])))
 
     # Open the relevant files
+
+    # The list of "runs" which includes multiple tests each
     runs = dictFromJson("runs.json")
+
+    # The list of those tests
     tests_list = runs[settings["DATASET"]]
+
+    # The strikes in each
     database = dictFromJson("database.json")
 
     # Get the relevant values out of the "database"
