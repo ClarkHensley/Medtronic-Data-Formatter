@@ -132,9 +132,9 @@ def main():
 
                             this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(this_test[i, 0]) - float(this_test[0, 0]))
 
-                            print("Before:", float(this_test[i, 1]), ",", float(settings["kN"]))
-                            this_test.strike_set.impact_arr[i] = float(this_test[i, 1]) * float(settings["kN"])
-                            print("After:", this_test.strike_set.impact_arr[i], "\n")
+                            #print("Before:", float(this_test[i, 1]), ",", float(settings["kN"]))
+                            this_test.strike_set.impact_arr[i] = float(this_test[i, 1]) * float(settings["kN"]) * 100
+                            #print("After:", this_test.strike_set.impact_arr[i], "\n")
 
                             if this_test.strike_set.accelerometer_present:
                                 this_test.strike_set.accel_arr[i] = float(this_test[i, 2]) / float(settings["mV_to_a"])
@@ -157,8 +157,6 @@ def main():
 
                 print(f"ENDING STRIKE {s + 1}\n")
                 print()
-
-                sys.exit()
 
             # Ensure the data are as expected, reject and remove outstanding values
             #  for f in range(int(total_dataset.strike_count[(g, t)])):
@@ -277,9 +275,14 @@ def formatCSV(path, csv, group, settings):
 
     data = pd.read_csv(csv_full_path, delimiter=",", dtype=str).to_numpy(dtype=str)
 
+    print(data.shape)
+    print(len(data))
     if(len(data) >= 40000):
         step = int(len(data) / 20000)
-        data = data[::step]
+        print(step)
+        data = data[::step, :]
+    print(len(data))
+    sys.exit()
 
     fitting_arr = np.array([False for _ in range(len(data))])
 
