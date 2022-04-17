@@ -1,0 +1,56 @@
+
+# Human-readable text settings for the Medtronic Data Formatter
+# These will be combined with some universal constants as the values used by the Data Formatter
+# Blank Lines and Lines starting with # will be ignored
+
+# Text name of the data set
+#
+# Current Datasets (Append new Datasets as necessary):
+# 20210617-Run
+# 20210706-Run
+# 20210804-Medtronic-Manuscript-Tests-alt
+# 20210804-Medtronic-Manuscript-Tests
+# Groupsselected
+# Medtronic-Data-20210806
+# TroubleShooting
+#
+DATASET: Groupsselected
+
+# Font size of Graph Titles, default 30
+TITLE-SIZE: 30
+# Font size of Graph Labels, default 22
+LABEL-SIZE: 22
+# Font Size of Graph Text, default 18
+TEXT-SIZE: 18
+
+# Type of Plot, either VIOLIN or BAR
+PLOT-TYPE: VIOLIN
+
+# X-Axis offset, default 75
+TIME-SHIFT: 75
+
+# Lower Level Limit for Force, if the data are noisy, default 0.1
+FORCE-LOWER-BOUND: 0.1
+
+# Reasonable Expected Force Values, default 3, 20
+FORCE-LOWER-REASONABLE: 3
+FORCE-UPPER-REASONABLE: 20
+
+# Reasonably Expected Area, default 250
+AREA-LOWER-LIMIT: 250
+
+# Reasonably Expected Slope, default 0
+SLOPE-LOWER-LIMIT: 0
+
+# Wavelength Lower Limit, default 1.5
+WAVE-END: 1.5
+
+# Boolean to show Legend on Plots, default False
+LEGEND: False
+
+# Boolean to show "average string counts", default False
+SHOW-STRING-COUNT: False
+
+# Boolean to show "n = [testcount]", default False
+SHOW-N-COUNT: False
+

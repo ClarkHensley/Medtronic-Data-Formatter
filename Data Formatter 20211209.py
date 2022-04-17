@@ -157,7 +157,7 @@ def main():
             # TODO I don't understand these
             strikes_rejected = 0
             strike_triggered = False
-            t_rc, F_rec, a_rec = np.empty([num_tests, (2 * inc) + 2, 100])
+            t_rec, F_rec, a_rec = np.empty([num_tests, (2 * inc) + 2, 100])
 
             Area, Fmax, IniSlope, Wavelength = np.zeros([num_tests, 100])
 
@@ -166,17 +166,30 @@ def main():
             Areamean, MaxFmean, IniSlpoemean, Wavelengthmean, AreaSTDev, MaxFSTDev, IniSlopeSTDev, WavelengthSTDev = np.zeros([num_tests])
 
             # At this point, we can slice the front off the data
-            data = data[4:]
+            data = data[3:]
 
             # TODO why?
-            #data[0, 1] = 0
-
-
-
+            data[0, 1] = 0
 
             # Determine if "curve-fitting is necessary"
-            useFitting = fittingFunc(data)
+            for i in range(int(0.0075 * len(data))):
+                useFitting = fittingFunc(data)
+                slopecheck = (float(data[i, 1]) - float(data[i - 1, 1])) / (float(data[i, 0]) - float(data[i - 1, 0]))
+                
+            # Formats more voltage
+            # TODO !!!!!!!!
+            if i >= inc + 10 and float(data[i, 1]) >= Flimit/kN and slopecheck >= Slimit and not "5" in data[i-250:i+250, 1]:
+                striktriggered = True
+                start = i - inc + shift
+                stop = i + inc + shift
+                for n in range(start, stop):
+                    if n < int(len(data)) - 1:
+                        array_count = int(n - start)
 
+                        t_rec[t][array_count][strike]
+
+                    else:
+                        break
 
 
 
@@ -346,19 +359,19 @@ def fittingFunc(data):
     This function serves two purposes. If the data are listing an overflow or underflow of voltage, fix it. Also, if any such fix is required, return True to set the fitting boolean, else return false
     """
     fitting_bool = False
-    overflow_check = ["âˆž", "∞"]
-    underflow_check = "-∞"
     for x in range(len(data)):
+        overflow_check = ["âˆž", "∞"]
+        underflow_check = "-∞"
         if data[x, 1] in overflow_check:
             data[x, 1] = "5"
             if not fitting_bool:
                 fitting_bool = True
-
-        if data[x, 1] == underflow_check:
-            data[x, 1] == "0"
+    
+        if data[x, 1] == underflow_check or float(data[x, 1]) < 0:
+            data[x, 1] = "0"
             if not fitting_bool:
                 fitting_bool = True
-
+    
     return fitting_bool
 
 
