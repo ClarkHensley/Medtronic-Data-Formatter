@@ -125,17 +125,16 @@ def main():
                     # This finds if the strike has occured
                     if (np.all(this_test[ind - 250:ind + 250, 1] != "5") and float(this_test[ind, 1]) >= float(settings["FORCE-LOWER-REASONABLE"]) / float(settings["kN"]) and current_slope >= float(settings["SLOPE-LOWER-LIMIT"])):
 
-                        print(ind)
-                        sys.exit()
-
                         this_test.strike_set.strike_triggered = True
                         subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
 
-                        for i, val in enumerate(subset_arr):
+                        for i, _ in enumerate(subset_arr):
 
                             this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(this_test[i, 0]) - float(this_test[0, 0]))
 
+                            print("Before:", float(this_test[i, 1]), ",", float(settings["kN"]))
                             this_test.strike_set.impact_arr[i] = float(this_test[i, 1]) * float(settings["kN"])
+                            print("After:", this_test.strike_set.impact_arr[i], "\n")
 
                             if this_test.strike_set.accelerometer_present:
                                 this_test.strike_set.accel_arr[i] = float(this_test[i, 2]) / float(settings["mV_to_a"])
@@ -159,6 +158,8 @@ def main():
                 print(f"ENDING STRIKE {s + 1}\n")
                 print()
 
+                sys.exit()
+
             # Ensure the data are as expected, reject and remove outstanding values
             #  for f in range(int(total_dataset.strike_count[(g, t)])):
             #
@@ -180,6 +181,7 @@ def main():
             this_test.plotAllData(settings)
 
             del this_test
+
 
 
 def formatData(directory):
