@@ -27,7 +27,6 @@ from FormattingClasses import StrikeSet, TestSet, DataSet
 
 def main():
 
-
     # Directory of this file
     source_directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -126,6 +125,9 @@ def main():
                     # This finds if the strike has occured
                     if (np.all(this_test[ind - 250:ind + 250, 1] != "5") and float(this_test[ind, 1]) >= float(settings["FORCE-LOWER-REASONABLE"]) / float(settings["kN"]) and current_slope >= float(settings["SLOPE-LOWER-LIMIT"])):
 
+                        print(ind)
+                        sys.exit()
+
                         this_test.strike_set.strike_triggered = True
                         subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
 
@@ -133,9 +135,7 @@ def main():
 
                             this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(this_test[i, 0]) - float(this_test[0, 0]))
 
-                            print("Before: ", this_test[i, 1])
                             this_test.strike_set.impact_arr[i] = float(this_test[i, 1]) * float(settings["kN"])
-                            print("After: ", this_test.strike_set.impact_arr[i], "\n")
 
                             if this_test.strike_set.accelerometer_present:
                                 this_test.strike_set.accel_arr[i] = float(this_test[i, 2]) / float(settings["mV_to_a"])
