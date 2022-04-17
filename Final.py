@@ -9,364 +9,246 @@ import sys
 import json
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 
+import matplotlib.pyplot as plt
 import seaborn as sns
-import statistics as stats
 from scipy.special import erfc
 
-from GenerateSettings import formatData
+from FormattingClasses import StrikeSet, TestSet, DataSet
+
+
+###############################################################################
+# Structure of the filesystem:
+#   Runs include multiple Tests
+#       Tests include multipe CSV files, multiple Strikes
+###############################################################################
 
 
 def main():
 
+
+    # Directory of this file
+    source_directory = os.path.dirname(os.path.realpath(__file__))
+
     # Firstly, generate the settings
-    formatData()
+    formatData(source_directory)
 
     # And read from the data json
     settings = dictFromJson("settings.json")
 
-    # Working Directory of this file
-    directory = os.path.dirname(os.path.realpath(__file__))
-    DF_directory = os.path.join(directory, "Dataformatter")
-    os.chdir(DF_directory)
+    plt.rcParams.update({'font.size': settings["TEXT-SIZE"]})
 
-    if not os.path.exists(os.path.join(DF_directory, "Data")):
-        os.mkdir(os.path.join(DF_directory, "Data"))
+    DATASET = settings["DATASET"]
 
-    if not os.path.exists(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"]))):
-        os.mkdir(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"])))
+    # Data Directory of this file
+    dataformatter_directory = os.path.join(source_directory, "Dataformatter")
+    os.chdir(dataformatter_directory)
 
-    # Open the relevant files
+    if not os.path.exists(os.path.join(dataformatter_directory, "Data")):
+        os.mkdir(os.path.join(dataformatter_directory, "Data"))
+
+    if not os.path.exists(os.path.join(dataformatter_directory, f"Data/{DATASET}")):
+        os.mkdir(os.path.join(dataformatter_directory, f"Data/{DATASET}"))
 
     # The list of "runs" which includes multiple tests each
-    runs = dictFromJson("runs.json")
+    groups = dictFromJson("groups.json")
 
     # The list of those tests
-    tests_list = runs[settings["DATASET"]]
+    groups_list = groups[DATASET]
 
     # The strikes in each
     database = dictFromJson("database.json")
 
-    # Get the relevant values out of the "database"
+    # We'll keep a list of each dataset we're testing
+    full_groups = {}
 
-    # Some constants
-    ImpulseData1 = np.empty([0, 4])
-    ImpulseData2 = np.empty([0, 4])
+    # First, we're going to get all the data out of the CSVs for each test
+    dim2 = 0
+    for group in groups_list:
+        full_groups[group] = []
+        CSV_dict = dict(database[group])
+        FOLDER = CSV_dict["FOLDER"]
+        TESTS = list(CSV_dict["TESTS"])
+        dim2 = max(dim2, len(TESTS))
+        for test in TESTS:
+            full_groups[group].append(os.path.join(FOLDER, test))
 
-    Recdata = np.empty([0, 5])
+    dim1 = len(groups_list)
 
-    # Next step is to iterate through each test in the tests list:
-    for r, run in enumerate(tests_list):
-        print(f"Starting run {run}:")
+    total_dataset = DataSet(dim1, dim2)
 
-        run_dict = dict(database[run])
+    for g, group in enumerate(full_groups):
 
-        folder = run_dict["FOLDER"]
-        Tests = run_dict["TESTS"]
+        # Set up each group, one test at a time
 
-        num_tests = len(Tests)
+        print()
+        print(f"BEGINNING GROUP {group}")
+        print()
 
-        strike_total = 0
-        for t, test in enumerate(Tests):
-            print(f"Starting test {test} in run {run}:")
+        for t, test in enumerate(full_groups[group]):
 
-            # Confirm the folder exists
-            data_dir = os.path.join(directory, "/".join([folder, test]))
-            if not os.path.exists(data_dir):
-                sys.exit(f"{folder}/{test} Directory was not found")
+            csv_path = os.path.join(source_directory, test)
 
-            # Get each file in the directory
-            csvs = os.listdir(data_dir)
+            test = test.split("/")[-1]
 
-            csvs.sort()
+            csv_list = os.listdir(csv_path)
+            csv_list = list(filter(lambda c: c.endswith(".csv"), csv_list))
+            csv_list.sort()
 
-            for c, csv in enumerate(csvs):
-                data = pd.read_csv(os.path.join(data_dir, csv), delimiter=',', dtype=str).to_numpy(dtype=str)
-                if len(data) >= 40000:
-                    step = int(len(data) / 20000)
-                    data = data[::step]
+            print()
+            print(f"BEGINNING TEST {test}")
+            print()
 
-                accelerometer_present = len(data[0]) == 3
+            total_dataset.strike_record[test] = {}
+            total_dataset.strike_count[test] = 0
 
-                # TODO This next section is quick-and-dirty. Fix it eventually
-                if c == 0:
+            test_size = len(csv_list)
 
-                    if t == 0:
-                        time_units = data[0][0]
-                        if time_units == "(s)":
-                            time_multiple = 1000000
-                        elif time_units == "(ms)":
-                            time_multiple = 1000
-                        elif time_units == "(us)":
-                            time_multiple = 1
+            this_test = TestSet(test, test_size)
 
-                    # Time values for the graphs, based on each CSV
-                    time_delta = time_multiple * (float(data[6][0]) - float(data[5][0]))
-                    inc = int(settings["timestep"] / (2 * time_delta))
-                    ratio = inc / 12000
+            for s, csv in enumerate(csv_list):
 
-                    if t == 0:
+                print()
+                print(f"BEGINNING STRIKE {s + 1}")
 
-                        shift = int(settings["TIME-SHIFT"] * (2 * inc / settings["timestep"]))
-                        num_rejected_strikes = 0
-                        strike_triggered = False
+                this_strike_set = formatCSV(csv_path, csv, group, settings)
+                
+                this_test.addStrikeSet(this_strike_set, s, settings)
 
-                        # Number of strikes in the CSV
-                        strike_count = np.zeros([num_tests])
-                        # Storage arrays for time stamps, impact force, and accelerometer values
-                        time_arr = np.empty([num_tests, inc * 2 + 2, 100])
-                        impact_arr = np.empty([num_tests, inc * 2 + 2, 100])
-                        accel_arr = np.empty([num_tests, inc * 2 + 2, 100])
-                        # Storage arrays for Area under the curve, force maximum per strike, initial slope, and wavelength
-                        area_arr = np.zeros([num_tests, 100])
-                        force_max_arr = np.zeros([num_tests, 100])
-                        init_slope_arr = np.zeros([num_tests, 100])
-                        wavelength_arr = np.zeros([num_tests, 100])
+                for ind in range(len(this_test.strike_set.data) - 250):
 
-                        # Maintains an Array of True of False if a strike has been rejected
-                        rejection_arr = [False for _ in range(100)]
-                        # Arrays for the means of the above cumulative arrays
-                        area_mean_arr = np.zeros([num_tests])
-
-                        force_max_mean_arr = np.zeros([num_tests])
-
-                        init_slope_mean_arr = np.zeros([num_tests])
-
-                        wavelength_mean_arr = np.zeros([num_tests])
-                        # Arrays for the standard deviations of the above cumulative arrays
-                        area_stdev_arr = np.zeros([num_tests])
-                        force_max_stdev_arr = np.zeros([num_tests])
-                        init_slope_stdev_arr = np.zeros([num_tests])
-                        wavelength_stdev_arr = np.zeros([num_tests])
-
-                # Constants are handled, time to start analysis
-                # Throw out the first 3 values in data, as that's only used for this set-up
-                data = data[3:]
-
-                fitting_arr = [False for _ in range(len(data))]
-
-                formatCSV(data, accelerometer_present, settings, fitting_arr)
-
-                # first 0.75% of the data
-                for ind, datum in enumerate(data):
-
-                    if ind >= len(data) + 250:
+                    if this_test.strike_set.strike_triggered:
                         break
 
-                    # current slope at this point on the curve
-                    curr_slope = (float(data[ind, 1]) - float(data[ind - 1, 1])) / (float(data[ind, 0]) - float(data[ind - 1, 0]))
+                    current_slope = this_test.getCurrentSlope(ind)
 
-                    # Determines if the strike has occurred
-                    if ind >= inc + 10 and all(data[ind - 250:ind + 250, 1] != "5") and float(data[ind, 1]) >= float(settings["FORCE-LOWER-REASONABLE"] / float(settings["kN"]) and curr_slope >= float(settings["SLOPE-LOWER-LIMIT"])):
-                        strike_triggered = True
+                    # This finds if the strike has occured
+                    if (np.all(this_test[ind - 250:ind + 250, 1] != "5") and float(this_test[ind, 1]) >= float(settings["FORCE-LOWER-REASONABLE"]) / float(settings["kN"]) and current_slope >= float(settings["SLOPE-LOWER-LIMIT"])):
 
-                        # Gather the waveform data
+                        this_test.strike_set.strike_triggered = True
+                        subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
 
-                        # TODO ??
-                        for n_ind in range(len(data[0])):
-                            n = ind + n_ind
+                        for i, val in enumerate(subset_arr):
 
-                            time_arr[t][n_ind][c] = time_multiple * (float(data[n, 0]) - float(data[n_ind, 0]))
+                            this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(this_test[i, 0]) - float(this_test[0, 0]))
 
-                            print("Before:\n", impact_arr[t][n_ind])
-                            impact_arr[t][n_ind][c] = float(data[n, 1]) * float(settings["kN"])
-                            print("After:\n", impact_arr[t][n_ind])
+                            print("Before: ", this_test[i, 1])
+                            this_test.strike_set.impact_arr[i] = float(this_test[i, 1]) * float(settings["kN"])
+                            print("After: ", this_test.strike_set.impact_arr[i], "\n")
 
-                            if accelerometer_present:
-                                accel_arr[t][n_ind][c] = float(data[n, 2]) / float(settings["mV_to_a"])
+                            if this_test.strike_set.accelerometer_present:
+                                this_test.strike_set.accel_arr[i] = float(this_test[i, 2]) / float(settings["mV_to_a"])
 
-                            # Curve-fititng for Force
-                            if fitting_arr[ind]:
-                                curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c)
+                        if this_test.strike_set.fitting_arr[ind]:
+                            this_test.strike_set.fitCurve(settings)
 
-                            # Waveform Characteristics
-                            waveformCharacteristics(settings, time_arr, area_arr, force_max_arr, init_slope_arr, impact_arr, wavelength_arr, inc, ratio, shift, time_delta, t, c)
+                        this_test.characterizeWaveform(settings, s)
 
-                        # After strike_triggered, we break the inner loop
-                        break
+                        this_test.updateData()
 
-                # Now, see if the strike was found in the previous loop
-                if not strike_triggered:
-                    num_rejected_strikes += 1
-                    print(f"Warning: Strike {c + 1} was not triggered!")
+                if not this_test.strike_set.strike_triggered:
+                    print(f"WARNING: STRIKE {s + 1} WAS REJECTED")
+                    print()
+                    this_test.rejected_strikes.append(s)
 
                 else:
-                    print(f"Srike {c + 1} accepted!")
-                    strike_count[t] = c
-                    strike_triggered = False
+                    this_test.strike_count += 1
+                    this_test.initialAppend()
 
-            # Statistical Analysis for each run
-            final_strike_ind = 0
+                print(f"ENDING STRIKE {s + 1}\n")
+                print()
 
-            for f in range(int(strike_count[t]) + 1):
+            # Ensure the data are as expected, reject and remove outstanding values
+            #  for f in range(int(total_dataset.strike_count[(g, t)])):
+            #
+            #      if not(settings["FORCE-LOWER-REASONABLE"] >= this_test.force_max_arr[f] >= settings["FORCE-LOWER-REASONABLE"] and this_test.area_arr[f] >= settings["AREA-LOWER-LIMIT"]):
+            #
+            #          this_test.strike_set.rejection_arr[f] = True
+            #          print(f"REJECTED STRIKE {f + 1}, OUT OF BOUNDS")
 
-                if force_max_arr[t][f] >= settings["FORCE-LOWER-REASONABLE"] and force_max_arr[t][f] <= settings["FORCE-UPPER-REASONABLE"] and area_arr[t][f] >= settings["AREA-LOWER-LIMIT"]:
-                    area_arr[final_strike_ind] = area_arr[f]
-                    force_max_arr[final_strike_ind] = force_max_arr[f]
-                    init_slope_arr[final_strike_ind] = init_slope_arr[f]
-                    wavelength_arr[final_strike_ind] = wavelength_arr[f]
-                    rejection_arr[f] = False
-                    final_strike_ind += 1
+            #  # Possibly not the best way to filter a numpy array, but we already store the rejection array, so this is a good use for it
+            #  this_test.area_arr = this_test.area_arr[this_test.strike_set.rejection_arr]
+            #  this_test.force_max_arr = this_test.force_max_arr[this_test.strike_set.rejection_arr]
+            #  this_test.init_slope_arr = this_test.init_slope_arr[this_test.strike_set.rejection_arr]
+            #  this_test.wavelength_arr = this_test.wavelength_arr[this_test.strike_set.rejection_arr]
 
-                else:
-                    rejection_arr[f] = True
+            this_test.finalize()
 
-            # Calculate statistics
-            selected_area_arr = area_arr[0:final_strike_ind]
-            selected_force_max_arr = force_max_arr[0:final_strike_ind]
+            total_dataset.calculateStats(this_test, (g, t))
 
-            area_mean_arr[t] = stats.mean(selected_area_arr)
-            area_stdev_arr[t] = stats.stdev(selected_area_arr, area_mean_arr[t])
-            force_max_mean_arr[t] = stats.mean(selected_force_max_arr)
-            force_max_stdev_arr[t] = stats.stdev(selected_force_max_arr, force_max_mean_arr[t])
-            init_slope_mean_arr[t] = stats.mean(init_slope_arr[0:final_strike_ind])
-            init_slope_stdev_arr[t] = stats.stdev(init_slope_arr[0:final_strike_ind], init_slope_mean_arr[t])
-            wavelength_mean_arr[t] = stats.mean(wavelength_arr[0:final_strike_ind])
-            wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:final_strike_ind], wavelength_mean_arr[t])
+            this_test.plotAllData(settings)
 
-            # Reject Values based on "Chauvenets and absurdly low values"
-            # Selected array, len(selected array) maxmean[t] maxstdev[t]
-            rejected_area_bool = ((erfc(np.abs(selected_area_arr) / area_stdev_arr[t])) > (1 / (2 * len(selected_area_arr))))
-            rejected_force_max_bool = ((erfc(np.abs(selected_force_max_arr) / force_max_stdev_arr[t])) > (1 / (2 * len(selected_force_max_arr))))
+            del this_test
 
-            init_rejection_ind = 0
-            chauv_rejection_ind = 0
 
-            for i in range(0, final_strike_ind):
-                if rejection_arr[i]:
-                    init_rejection_ind += 1
+def formatData(directory):
 
-                if rejected_area_bool[i] and rejected_force_max_bool[i]:
-                    area_arr[t][chauv_rejection_ind] = area_arr[t][i]
-                    init_slope_arr[t][chauv_rejection_ind] = init_slope_arr[t][i]
-                    wavelength_arr[t][chauv_rejection_ind] = wavelength_arr[t][i]
-                    rejection_arr[i + init_rejection_ind] = False
+    # Absolute Path of this file
+    settings_file = os.path.join(directory, "settings.txt")
 
-                    chauv_rejection_ind += 1
+    with open(settings_file, "r") as sf:
+        settings = sf.readlines()
 
-                    ImpulseData1 = np.vstack([ImpulseData1, [area_arr[t][i],  force_max_arr[t][i], init_slope_arr[t][i], wavelength_arr[t][i]]])
+    # format each line
+    settings_dict = {}
+    for setting in settings:
+        if setting == "" or setting.isspace() or setting.startswith("#"):
+            pass
 
-                else:
-                    print("Rejected Strike: {s}".format(s=i+chauv_rejection_ind+init_rejection_ind))
-                    rejection_arr[i + rejected_area_bool] = True
+        else:
+            setting_vals = setting.split(":")
 
-            for i in range(chauv_rejection_ind):
+            # If, somehow, there is an extra colon in the data in the setting, we'll rejoin that
+            setting = setting_vals[0]
+            setting = setting.strip()
+            if len(setting_vals) > 2:
+                data = setting_vals[1:].join(":")
+            else:
+                data = setting_vals[1]
 
-                if not rejection_arr[i]:
-                    # TODO should probably be a function
-                    plt.figure("ForcePlot", figsize=(18, 10))
-                    plt.grid(True)
-                    plt.tight_layout()
-                    plt.title(Tests[t])
-                    plt.ylabel("Force (kN)")
-                    plt.xlabel("Time (us)")
+            data = data.strip()
+            
+            if data == "True" or data == "False":
 
-                    plt.rc("axes", titlesize=settings["TITLE-SIZE"])
-                    plt.rc("axes", labelsize=settings["LABEL-SIZE"])
-                    plt.plot(time_arr[t, 1:inc * 2 - 5, i], force_max_arr[t, 1:inc * 2 - 5, i], marker=".", label=f"Strike {str(i + 1)}")
-                    if settings["LEGEND"]:
-                        plt.legend(loc="upper left")
-                    plt.axis([0, 300, 0, 25])
-                    plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-ForcePlot.png".format(d=settings["DATASET"], t=test)))
-                    plt.close("ForcePlot")
+                data = bool(data)
 
-                    if accelerometer_present:
-                        # waveplot(1, strike, test, inc * 2 - 5, Testname[test], "Time (us), "Acceleration (m/s^2), 1, legendOn)
-                        plt.figure("AccelPlot", figsize=(18, 10))
-                        plt.grid(True)
-                        plt.tight_layout()
-                        plt.title(Tests[t])
-                        plt.ylabel("Acceleration (m/s^2)")
-                        plt.xlabel("Time (us)")
-                        plt.rc("axes", titlesize=settings["TITLE-SIZE"])
-                        plt.rc("axes", labelsize=settings["LABEL-SIZE"])
-                        plt.plot(time_arr[t, 1:inc * 2 - 5, c], accel_arr[t, 1:inc * 2 - 5, c], marker=".", label="Strike")
-                        if settings["LEGEND"]:
-                            plt.legend(loc="upper left")
-                        plt.axis([0, 300, -9, 7])
-                        plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-AccelPlot.png".format(d=settings["DATASET"], t=test)))
-                        plt.close("AccelPlot")
+            else:
 
-            # Plot the Peak Force Data
-            plt.figure("PeakForcePlot", figsize=(18, 10))
-            plt.grid(True)
-            plt.tight_layout()
-            plt.title(Tests[t])
-            plt.ylabel("Force (kN)")
-            plt.xlabel("Stike Count")
-            # 2
-            plt.plot(list(range(1, chauv_rejection_ind)), force_max_arr[t, 0:inc * 2 - 5], marker=".")
+                try:
+                    data = float(data)
 
-            plt.axis([0, 300, 0, 25])
-            plt.savefig(os.path.join(DF_directory, "Data/{d}/{t}-PeakForcePlot".format(d=settings["DATASET"], t=test)))
-            plt.close("PeakForcePlot")
+                except ValueError:
+                    pass
 
-            # Update Statistics
-            area_mean_arr[t] = stats.mean(area_arr[0:chauv_rejection_ind])
-            area_stdev_arr[t] = stats.stdev(area_arr[0:chauv_rejection_ind], area_mean_arr[t])
+            settings_dict[setting] = data
 
-            force_max_arr[t] = stats.mean(force_max_arr[0:chauv_rejection_ind])
-            force_max_stdev_arr = stats.stdev(force_max_arr[0:chauv_rejection_ind], force_max_mean_arr[t])
+    # Now, we need to add some universal constants to the json
 
-            init_slope_mean_arr = stats.mean(init_slope_arr[0:chauv_rejection_ind])
-            init_slope_stdev_arr = stats.stdev(init_slope_arr[0:chauv_rejection_ind], init_slope_mean_arr[t])
+    # According to the original file, this converts "voltage to lbf to kN" and "1V = 100lbf for our sensor" whatever that means
+    kN = 4.44822162
 
-            wavelength_mean_arr[t] = stats.mean(wavelength_arr[0:chauv_rejection_ind])
-            wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:chauv_rejection_ind], wavelength_mean_arr[t])
+    # "converts milli-volts to acceleration"
+    mV_to_a = 1.090
 
-            # Increment strike total
-            strike_total += strike_count[t] + 1
+    # "picoscope range for the acceleration"
+    max_av = 10
 
-        # Outside of while Test
-        final_names = []
-        for i in range(num_tests):
-            ImpulseData2 = np.vstack([ImpulseData2, [area_mean_arr[i], force_max_mean_arr[i], init_slope_mean_arr[i], wavelength_mean_arr[i]]])
+    # Sampling time rate (microseconds)
+    timestep = 300
 
-            final_name = run
-            if settings["SHOW-STRING-COUNT"]:
-                final_name += " " + str(round(strike_total / num_tests, 1))
-            if settings["SHOW-N-COUNT"]:
-                final_name += "n = " + str(num_tests)
+    # Residue for force
+    residue = 1000
 
-            final_names.append(final_name)
+    settings_dict["kN"] = kN
+    settings_dict["mV_to_a"] = mV_to_a
+    settings_dict["max_av"] = max_av
+    settings_dict["timestep"] = timestep
+    settings_dict["residue"] = residue
 
-            Recdata = np.vstack([Recdata, [final_name, area_mean_arr[i], force_max_mean_arr[i], init_slope_mean_arr[i], wavelength_mean_arr[i]]])
-
-        # Plot the Data
-        data_columns = np.array(["Area", "Force", "Slope", "Wavelength"])
-        name_columns_test = np.array(["Test"])
-
-        ImpulseDataFrame1 = pd.DataFrame(ImpulseData1, columns=data_columns)
-        TestNameFrame = pd.DataFrame(final_names, columns=name_columns_test)
-
-        createChart("Area", TestNameFrame.Test, ImpulseDataFrame1.Area, f"Area Under the Impulse curve {run}", "Test Name", "Area (kN * us)", settings, DF_directory)
-
-        createChart("Max Force", TestNameFrame.Test, ImpulseDataFrame1.Force, f"Peak Force {run}", "Test name", "force (kN)", settings, DF_directory)
-
-        createChart("Slope", TestNameFrame.Test, ImpulseDataFrame1.Slope, f"Iniital Slope of the Wave {run}", "Test Name", "Slope (kN / us)", settings, DF_directory)
-
-        createChart("Wavelength", TestNameFrame.Test, ImpulseDataFrame1.Wavelength, f"Duration of the Impact Event {run}", "Test Name", "Duration (us)", settings, DF_directory)
-
-    name_columns_group = np.array(["Group"])
-    ImpulseDataFrame2 = pd.DataFrame(ImpulseData2, columns=data_columns)
-    GroupNameFrame = pd.DataFrame(tests_list, columns=name_columns_group)
-
-    createChart("Cumulative Area", GroupNameFrame.Group, ImpulseDataFrame2.Area, "Area Under the Impulse Curve", "Group", "Area (Kn * us)", settings, DF_directory)
-
-    createChart("Cumulative Max Force", GroupNameFrame.Group, ImpulseDataFrame2.Force, "Peak Force", "Group", "Force (kN)", settings, DF_directory)
-
-    createChart("Cumulative Initial Slope of the Wave", GroupNameFrame.Group, ImpulseDataFrame2.Slope, "Initial Slope of the Wave", "Group", "Slope (kN / us)", settings, DF_directory)
-
-    createChart("Cumulative Duration of the Impact Event", GroupNameFrame.Group, ImpulseDataFrame2.Wavelength, "Duration of the Impace Event", "Group", "Duration (us)", settings, DF_directory)
-
-    # Finally, record values to a new CSV
-    new_path = os.path.join(DF_directory, "Data/{d}/{d}-Recorded-CSV".format(d=settings["DATASET"]))
-    records_column = np.array(["Implant", "Area", "Force", "Slope", "Wavelength"])
-
-    record_data_frame = pd.DataFrame(Recdata, columns=records_column)
-    record_data_frame.to_csv(new_path, encoding="utf-8")
+    # Dump to json
+    with open("settings.json", "w") as sj:
+        json.dump(settings_dict, sj)
 
 
 def dictFromJson(file):
@@ -377,18 +259,33 @@ def dictFromJson(file):
         with open(file, "r") as h:
             h_content = h.read()
             temp = json.loads(h_content)
+
         return temp
+
     except FileNotFoundError:
-        sys.exit("{missing_file} JSON file could not be found.".format(missing_file=file))
+        sys.exit(f"{file} JSON file could not be found.")
 
 
-def formatCSV(data, accelerometer_present, settings, fitting_arr):
+def formatCSV(path, csv, group, settings):
     """
     Remove invalid values from the CSV, take care of under- or over-flow errors
     """
-    # Data[0, 1] should always be 0, for some reason
-    data[0, 1] = 0
 
+    csv_full_path = os.path.join(path, csv)
+
+    data = pd.read_csv(csv_full_path, delimiter=",", dtype=str).to_numpy(dtype=str)
+
+    if(len(data) >= 40000):
+        step = int(len(data) / 20000)
+        data = data[::step]
+
+    fitting_arr = np.array([False for _ in range(len(data))])
+
+    time_storage = data[0, 0]
+
+    data = data[3:]
+
+    # here we format the data
     for d, datum in enumerate(data):
         if datum[1] == "âˆž" or datum[1] == "∞":
             data[d, 1] = "5"
@@ -398,118 +295,14 @@ def formatCSV(data, accelerometer_present, settings, fitting_arr):
             data[d, 1] = "0"
             fitting_arr[d] = True
 
-        if accelerometer_present:
+        if len(datum) == 3:
             if datum[2] == "âˆž" or datum[2] == "∞":
                 data[d, 2] = str(settings["max_av"])
 
             if datum[2] == "-∞":
                 data[d, 2] = str(-1 * settings["max_av"])
 
-def curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c):
-    #delta = (time_arr[t][2][c] - time_arr[t][1][c]) * time_multiple
-
-    start_interpolation = False
-
-    for i in range(0, 2 * inc - 1):
-        check_val = abs(impact_arr[t][i + 1][c] - impact_arr[t][i][c]) #/ delta
-        if not start_interpolation:
-            if check_val >= 10:
-                start_interpolation = True
-
-                # start_time is always offset by residue
-                start_time = i - float(settings["residue"])
-        else:
-            if check_val <= 2 and impact_arr[t][i][c] >= 0 and impact_arr[t][i][c] < 4 * float(settings["kN"]):
-                start_interpolation = False
-                end_time = i
-
-                '''print("IE:", impact_arr[t][end_time + 1][c])
-                print("IS:", impact_arr[t][start_time[c]])
-                print("TE:", time_arr[t][end_time][c])
-                print("TS:", time_arr[t][start_time][c])'''
-
-                interpolation_slope = (impact_arr[t][end_time + 1][c] - impact_arr[t][start_time][c]) / (time_arr[t][end_time][c] - time_arr[t][start_time][c])
-                for j in range(start_time, end_time):
-                    impact_arr[t][j][c] = impact_arr[t][j - 1][c] + interpolation_slope * delta
-
-                # TODO eww
-                i = j
-
-            if i == 2 * inc - 2:
-                end_time = 2 * inc - 1
-                #print(t)
-                #print(end_time)
-                #print(start_time)
-                #print(impact_arr)
-                #print(time_arr)
-                interpolation_slope = (impact_arr[t][end_time + 1][c] - impact_arr[t][start_time][c]) / (time_arr[t][end_time][c] - time_arr[t][start_time][c])
-                
-                for j in range(start_time, end_time + 1):
-                    impact_arr[t][j][c] = impact_arr[t][j - 1][c] + interpolation_slope * delta
-
-                # TODO eww
-                i = j
-
-        if impact_arr[t][n_ind][c] < float(settings["FORCE-LOWER-BOUND"]) * float(settings["kN"]):
-            impact_arr[t][n_ind][c] = float(settings["FORCE-LOWER-BOUND"]) * float(settings["kN"])
-
-
-def waveformCharacteristics(settings, time_arr, area_arr, force_max_arr, init_slope_arr, impact_arr, wavelength_arr, inc, ratio, shift, time_delta, t, c):
-    """
-    Format the data for the waveforms
-    """
-
-    init_slope_point_cap = int(500 * ratio)
-    wave_duration = False
-
-    for i in range(0, 2 * inc):
-        area_arr[t][c] = area_arr[t][c] + (impact_arr[t][i][c] * time_delta)
-
-        if force_max_arr[t][c] < impact_arr[t][i][c]:
-            force_max_arr[t][c] = impact_arr[t][i][c]
-
-        if i <= (inc + init_slope_point_cap / 2 - 1 - shift) and i > inc - init_slope_point_cap / 2 - shift:
-            #print(t, i, c)
-            #print(impact_arr[t, i])
-            #print(time_arr[t, i])
-            #print(impact_arr[t, i - 1])
-            #print(time_arr[t, i - 1])
-            init_slope_arr[t][c] += ((impact_arr[t][i][c] - impact_arr[t][i - 1][c]) / (time_arr[t][i][c] - time_arr[t][i - 1][c])) / init_slope_point_cap
-
-        if not wave_duration and (impact_arr[t][i][c] >= 3):
-            wave_duration = True
-            ws = i
-        elif wave_duration and (impact_arr[t][i][c] <= settings["WAVE-END"]):
-            wavelength_arr[t][c] = (i - ws) * (settings["timestep"] / (inc * 2))
-            wave_duration = False
-
-
-def createChart(name, x_data, y_data, t_header, x_label, y_label, settings, DF_directory):
-    """
-    Create a PLT chart of the data
-    """
-
-    plt.figure(name, figsize=(18, 10))
-    plt.title(t_header)
-
-    plt.rc("axes", titlesize=settings["TITLE-SIZE"])
-    plt.rc("axes", labelsize=settings["LABEL-SIZE"])
-
-    if settings["PLOT-TYPE"] == "VIOLIN":
-        sns.violinplot(x=x_data, y=y_data)
-        filename = t_header + "-Violin-Plot.png"
-    elif settings["PLOT-TYPE"] == "BAR":
-        plt.boxplot(x=x_data, y=y_data)
-        filename = t_header + "-Bar-Graph.png"
-
-    plt.ylabel(y_label)
-    plt.xlabel(x_label)
-    plt.tight_layout()
-    if not os.path.exists(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"]))):
-        os.mkdir(os.path.join(DF_directory, "Data/{d}".format(d=settings["DATASET"])))
-    print(os.path.join(DF_directory, "Data/{d}/{fn}".format(d=settings["DATASET"], fn=filename)))
-    plt.savefig(os.path.join(DF_directory, "Data/{d}/{fn}".format(d=settings["DATASET"], fn=filename)))
-    plt.close(name)
+    return StrikeSet(data, fitting_arr, group, time_storage, csv, settings)
 
 
 if __name__ == "__main__":

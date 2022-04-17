@@ -78,6 +78,7 @@ def main():
 
             for c, csv in enumerate(csvs):
                 data = pd.read_csv(os.path.join(data_dir, csv), delimiter=',', dtype=str).to_numpy(dtype=str)
+
                 if len(data) >= 40000:
                     step = int(len(data) / 20000)
                     data = data[::step]
@@ -162,6 +163,7 @@ def main():
                         for n_ind in range(len(data[0])):
                             n = ind + n_ind
 
+                            
                             time_arr[t][n_ind][c] = time_multiple * (float(data[n, 0]) - float(data[n_ind, 0]))
 
                             print("Before:\n", impact_arr[t][n_ind])
@@ -221,7 +223,6 @@ def main():
             wavelength_stdev_arr[t] = stats.stdev(wavelength_arr[0:final_strike_ind], wavelength_mean_arr[t])
 
             # Reject Values based on "Chauvenets and absurdly low values"
-            # Selected array, len(selected array) maxmean[t] maxstdev[t]
             rejected_area_bool = ((erfc(np.abs(selected_area_arr) / area_stdev_arr[t])) > (1 / (2 * len(selected_area_arr))))
             rejected_force_max_bool = ((erfc(np.abs(selected_force_max_arr) / force_max_stdev_arr[t])) > (1 / (2 * len(selected_force_max_arr))))
 
@@ -417,10 +418,6 @@ def curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c
                 start_interpolation = False
                 end_time = i
 
-                '''print("IE:", impact_arr[t][end_time + 1][c])
-                print("IS:", impact_arr[t][start_time[c]])
-                print("TE:", time_arr[t][end_time][c])
-                print("TS:", time_arr[t][start_time][c])'''
 
                 interpolation_slope = (impact_arr[t][end_time + 1][c] - impact_arr[t][start_time][c]) / (time_arr[t][end_time][c] - time_arr[t][start_time][c])
                 for j in range(start_time, end_time):
@@ -431,11 +428,6 @@ def curveFitting(settings, time_arr, impact_arr, time_multiple, inc, n_ind, t, c
 
             if i == 2 * inc - 2:
                 end_time = 2 * inc - 1
-                #print(t)
-                #print(end_time)
-                #print(start_time)
-                #print(impact_arr)
-                #print(time_arr)
                 interpolation_slope = (impact_arr[t][end_time + 1][c] - impact_arr[t][start_time][c]) / (time_arr[t][end_time][c] - time_arr[t][start_time][c])
                 
                 for j in range(start_time, end_time + 1):
