@@ -1,8 +1,8 @@
+import os
+from copy import deepcopy
 import numpy as np
-import statistics as stats
 import matplotlib.pyplot as plt
 
-from copy import deepcopy
 
 
 
@@ -21,18 +21,6 @@ class StrikeSet:
         self.group = group
         self.name = strike
 
-        self.fitting_arr = fitting_arr
-
-        self.data = data
-        self.accelerometer_present = len(data[0]) == 3
-        self.timedelta = round(float(data[1, 0]) - float(data[0, 0]), 2)
-
-        self.inc = int(settings["timestep"]) / (2 * self.timedelta)
-
-        self.arrsize = 2 * int(self.inc) + 2
-
-        self.ratio = self.inc / 12000
-
         self.time_multiple = 0
 
         if(time_storage == "(s)"):
@@ -42,6 +30,19 @@ class StrikeSet:
         elif(time_storage == "(us)"):
             self.time_multiple = 1
 
+        self.fitting_arr = fitting_arr
+
+        self.data = data
+        self.accelerometer_present = len(data[0]) == 3
+        self.timedelta = round(float(data[1, 0]) - float(data[0, 0]), 2) * self.time_multiple
+
+        self.inc = settings["timestep"] / (2 * self.timedelta)
+
+        self.arrsize = 2 * int(self.inc) + 2
+
+        self.ratio = self.inc / 12000
+
+
         self.time_arr = np.zeros(shape=(self.arrsize))
         self.impact_arr = np.zeros(shape=(self.arrsize))
         self.accel_arr = np.zeros(shape=(self.arrsize))
@@ -49,6 +50,8 @@ class StrikeSet:
         self.rejection_arr = np.array([False for _ in range(self.arrsize)])
 
         self.strike_triggered = False
+
+        self.threshold = []
 
     def __getitem__(self, key):
         return self.data[key]
@@ -60,7 +63,6 @@ class StrikeSet:
 
         start_interpolation = False
         delta = (self.time_arr[1] - self.time_arr[0]) * self.time_multiple
-        print(f"Delta: {delta}")
         start_index = 0
         end_index = 0
 
@@ -97,6 +99,31 @@ class StrikeSet:
             if self.impact_arr[self.arrsize - 3] < check_val:
                 self.impact_arr[self.arrsize - 3] = check_val
 
+    def smootheCurve(self, settings):
+
+        mask = [True for _ in range(self.arrsize)]
+
+        for i in range(1, self.arrsize):
+            if abs(self.impact_arr[i] - self.impact_arr[i - 1]) > settings["OUTLIER-THRESHOLD"]:
+                mask[i] = False
+
+        prev_i = -1
+
+        for i in range(len(mask)):
+            if mask[i] is False:
+                if prev_i == -1:
+                    prev_i = i
+
+                else:
+                    for j in range(prev_i, i + 1):
+                        mask[j] = False
+                    prev_i = -1
+
+        self.impact_arr = self.impact_arr[mask]
+        self.time_arr = self.time_arr[mask]
+
+        if self.accelerometer_present:
+            self.accel_arr = self.accel_arr[mask]
 
 
 class TestSet:
@@ -172,8 +199,8 @@ class TestSet:
 
     def initialAppend(self):
         self.strike_sets[self.current_ind] = deepcopy(self.strike_set)
-    
-    def finalize(self):
+
+    def finalize(self, settings):
 
         if len(self.rejected_strikes) != 0:
 
@@ -204,7 +231,7 @@ class TestSet:
         wave_start = 0
         for ind in range(self.strike_set.arrsize):
             if wave_duration:
-                if self.strike_set.impact_arr[ind] <= float(settings["WAVE-END"]):
+                if self.strike_set.impact_arr[ind] <= settings["WAVE-END"]:
                     self.wavelength_arr[s] = (ind - wave_start) * (settings["timestep"] / (2 * self.strike_set.inc))
                     wave_duration = False
 
@@ -213,36 +240,36 @@ class TestSet:
                     wave_duration = True
                     wave_start = ind
 
-    def plotAllData(self, settings):
+    def plotAllData(self, directory, settings):
 
-        # Plot Time v. Force
+        # Plot Force v. Time
         time_v_force_data = {
-                "title": f"Time v. Force for {self.name}",
+                "title": f"Force v. Time for {self.name}",
                 "xlabel": "Time (us)",
                 "ylabel": "Force (kN)",
-                "xdata": np.ndarray(shape=(self.strike_count, self.strike_set.arrsize)),
-                "ydata": np.ndarray(shape=(self.strike_count, self.strike_set.arrsize)),
+                "xdata": [],
+                "ydata": [],
                 "label": "Strike",
                 "legend": settings["LEGEND"]
                 }
 
-        # Plot Time v. Accel
+        # Plot Accel v. Time
         time_v_accel_data = {
-            "title": f"Time v. Accel for {self.name}",
+            "title": f"Accel v. Time for {self.name}",
             "xlabel": "Time (us)",
             "ylabel": "Acceleration (m/s^2)",
-            "xdata": np.ndarray(shape=(self.strike_count, self.strike_set.arrsize)),
-            "ydata": np.ndarray(shape=(self.strike_count, self.strike_set.arrsize)),
+            "xdata": [],
+            "ydata": [],
             "label": "Strike",
             "legend": settings["LEGEND"]
             }
 
-        # Plot Strike v. Force
+        # Plot Force v. Strike
         strike_v_max_force_data = {
-                "title": f"Strike Number v. Max Force for {self.name}",
+                "title": f"Max Force v. Strike Number for {self.name}",
                 "xlabel": "Strike Number",
                 "ylabel": "Force (kN)",
-                "xdata": np.array(list(self.strike_sets.keys())),
+                "xdata": list(self.strike_sets.keys()),
                 "ydata": self.force_max_arr,
                 "label": "",
                 "legend": False
@@ -250,21 +277,21 @@ class TestSet:
 
         for s, strike in enumerate(list(self.strike_sets.values())):
 
-            time_v_force_data["xdata"][s] = strike.time_arr
-            time_v_force_data["ydata"][s] = strike.impact_arr
+            time_v_force_data["xdata"].append(strike.time_arr)
+            time_v_force_data["ydata"].append(strike.impact_arr)
 
             if strike.accelerometer_present:
-                time_v_accel_data["xdata"][s] = strike.time_arr
-                time_v_accel_data["ydata"][s] = strike.accel_arr
+                time_v_accel_data["xdata"].append(strike.time_arr)
+                time_v_accel_data["ydata"].append(strike.accel_arr)
     
-        self.plotData(time_v_force_data, settings)
+        self.plotData(time_v_force_data, directory, settings)
 
-        self.plotData(strike_v_max_force_data, settings)
+        self.plotData(strike_v_max_force_data, directory, settings)
 
         if strike.accelerometer_present:
-            self.plotData(time_v_accel_data, settings)
+            self.plotData(time_v_accel_data, directory, settings)
 
-    def plotData(self, data, settings):
+    def plotData(self, data, directory, settings):
 
         plt.figure(data["title"])
         plt.grid(True)
@@ -276,7 +303,7 @@ class TestSet:
         plt.rc("axes", titlesize=settings["TITLE-SIZE"])
         plt.rc("axes", labelsize=settings["LABEL-SIZE"])
 
-        if data["xdata"].ndim == 1 and data["ydata"].ndim == 1:
+        if type(data["xdata"][0]) != np.ndarray and type(data["ydata"][0]) != np.ndarray:
             plt.plot(data["xdata"], data["ydata"], marker=".", label=data["label"] + " 1")
 
         else:
@@ -287,11 +314,20 @@ class TestSet:
             plt.legend(loc="upper left")
 
         plt.show()
+        plt.savefig(os.path.join(directory, data["title"]) + ".png")
+        plt.close("all")
 
 
 class DataSet:
 
     def __init__(self, dim1, dim2):
+
+        # 3-dimensional Dictionary to store the actual data
+        self.data_record = {}
+
+        # Self.data_record is keyed by group names
+        # self.data_record[group] is keyed by tests
+        # self.data_record[group][test] is keyed by one of (area, force_max, init_slope, wavelength)
 
         # Data Means
         self.area_mean_arr = np.zeros(shape=(dim1, dim2))
@@ -305,21 +341,17 @@ class DataSet:
         self.init_slope_stdev_arr = np.zeros(shape=(dim1, dim2))
         self.wavelength_stdev_arr = np.zeros(shape=(dim1, dim2))
 
-        # Keeps track of all strikes
-        self.strike_record = {}
-        self.strike_count = {}
-
     def calculateStats(self, test, i):
 
-        self.area_mean_arr[i] = stats.mean(test.area_arr)
-        self.area_stdev_arr[i] = stats.stdev(test.area_arr, self.area_mean_arr[i])
+        self.area_mean_arr[i] = np.mean(test.area_arr)
+        self.area_stdev_arr[i] = np.std(test.area_arr)
 
-        self.force_max_mean_arr[i] = stats.mean(test.force_max_arr)
-        self.force_max_stdev_arr[i] = stats.stdev(test.force_max_arr, self.force_max_mean_arr[i])
+        self.force_max_mean_arr[i] = np.mean(test.force_max_arr)
+        self.force_max_stdev_arr[i] = np.std(test.force_max_arr)
 
-        self.init_slope_mean_arr[i] = stats.mean(test.init_slope_arr)
-        self.init_slope_stdev_arr[i] = stats.stdev(test.init_slope_arr, self.init_slope_mean_arr[i])
+        self.init_slope_mean_arr[i] = np.mean(test.init_slope_arr)
+        self.init_slope_stdev_arr[i] = np.std(test.init_slope_arr)
 
-        self.wavelength_mean_arr[i] = stats.mean(test.wavelength_arr)
-        self.wavelength_stdev_arr[i] = stats.stdev(test.wavelength_arr, self.wavelength_mean_arr[i])
+        self.wavelength_mean_arr[i] = np.mean(test.wavelength_arr)
+        self.wavelength_stdev_arr[i] = np.std(test.wavelength_arr)
 

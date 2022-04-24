@@ -1,0 +1,17 @@
+{
+
+    "20210617-Run": [ "20210621 20cm 0.5lb", "20210617 40cm 0.5lb", "20210617 60cm 0.5lb", "20210617 20cm 0.75lb", "20210617 40cm 0.75lb", "20210617 60cm 0.75lb", "20210617 20cm 1lb", "20210617 40cm 1lb", "20210617 60cm 1lb", "20210409 Medtronic Data" ],
+
+"20210706-Run": [ "20210706 60cm 0.5lb accelerometer", "20210706 60cm 0.776lb accelerometer", "20210706 60cm 1lb accelerometer", "20210706 60cm 2lb accelerometer" ],
+
+    "20210804-Medtronic-Manuscript-Tests-alt":[ "20210927 Implant 1", "20210920 Implant 2", "20210913 Implant 3", "20210927 Implant 4", "20210920 Implant 5", "20210916 Implant 6", "20210920 Implant 7", "20210916 Implant 8", "20210916 Implant 9", "20210826 Implant 10", "20210907 Implant 11", "20210913 Implant 12", "20210901 Implant 13", "20210908 Implant 14", "20210910 Implant 15", "20210902 Implant 16", "20210909 Implant 17", "20210909 Implant 18" ],
+
+    "20210804-Medtronic-Manuscript-Tests": [ "20210927 Implant 1, 20210920 Implant 2", "20210913 Implant 3", "20210927 Implant 4", "20210920 Implant 5", "20210916 Implant 6", "20210920 Implant 7", "20210916 Implant 8", "20210916 Implant 9", "20210927 Implant 1-2", "20210927 Implant 4-2", "20210927 Implant 7-2", "20210826 Implant 10", "20210907 Implant 11", "20210913 Implant 12", "20210901 Implant 13", "20210908 Implant 14", "20210910 Implant 15", "20210902 Implant 16", "20210909 Implant 17", "20210909 Implant 18", "20210928 Implant 10-2", "20210929 Implant 13-2", "20210930-Implant 16-2" ],
+    
+    "Groupsselected": [ "20210409 Medtronic Data" ],
+    
+    "Medtronic-Data-20210806": [ "20210409 Medtronic Data", "20210805 Cadaver 1", "20210806 Cadaver 2" ],
+
+    "TroubleShooting": [ "Trouble Shooting Data", "Trouble Shooting Data" ]
+
+}

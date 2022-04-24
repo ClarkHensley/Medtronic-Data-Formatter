@@ -26,6 +26,9 @@ TEXT-SIZE: 18
 # Type of Plot, either VIOLIN or BAR
 PLOT-TYPE: VIOLIN
 
+# Threshold to reject outliers
+OUTLIER-THRESHOLD: 0.75
+
 # X-Axis offset, default 75
 TIME-SHIFT: 75
 
