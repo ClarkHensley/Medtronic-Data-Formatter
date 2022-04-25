@@ -3,8 +3,11 @@
 *.zip
 
 # No need to include all the CSVs on Github
+!src/MedtronicDataFormatter.py
 src/Medtronic*
 
+# Include the .gitignore
+!.gitignore
 # No other dotted directories/files
 .*
 
