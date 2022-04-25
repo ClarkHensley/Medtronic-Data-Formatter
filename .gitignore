@@ -1,8 +1,12 @@
 *.zip
-Dataformater/
+Dataformatter/
 Medtronic*
+
+.*
+__pycache__/
 
 bin/
 lib/
 lib64
 share/
+Backup-Data/
