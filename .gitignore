@@ -1,10 +1,15 @@
+
+# Don't include the zipped version of the final implementation
 *.zip
-src/Datasets
+
+# No need to include all the CSVs on Github
 src/Medtronic*
 
+# No other dotted directories/files
 .*
-__pycache__/
 
+# No python venv files
+__pycache__/
 bin/
 lib/
 lib64
