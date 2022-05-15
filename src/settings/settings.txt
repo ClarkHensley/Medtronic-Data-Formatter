@@ -57,3 +57,10 @@ SHOW-STRING-COUNT: False
 # Boolean to show "n = [testcount]", default False
 SHOW-N-COUNT: False
 
+# Set of Time Units mapped to the proper conversion factor to Microseconds (us)
+TIME-DICT: {
+  (s), 1000000
+  (ms), 1000
+  (us), 1
+}
+

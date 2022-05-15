@@ -288,37 +288,58 @@ def formatData(directory):
 
     # format each line
     settings_dict = {}
-    for setting in settings:
-        if setting == "" or setting.isspace() or setting.startswith("#"):
+    inner_dicts = {}
+    started_dict = False
+    current_dict = ""
+    for line in settings:
+        if line == "" or line.isspace() or line.startswith("#"):
             pass
 
+        elif "{" in line:
+            started_dict = True
+            current_dict = line.split(":")[0]
+            inner_dicts[current_dict] = {}
+        elif "}" in line:
+            started_dict = False
+            current_dict = ""
         else:
-            setting_vals = setting.split(":")
+            if started_dict:
+                vals = line.split(",")
+                key = vals[0].strip()
+                value = int(vals[1])
+                inner_dicts[current_dict][key] = value
 
-            # If, somehow, there is an extra colon in the data in the setting, we'll rejoin that
-            setting = setting_vals[0]
-            setting = setting.strip()
-            if len(setting_vals) > 2:
-                data = ":".join(setting_vals[1:])
             else:
-                data = setting_vals[1]
 
-            data = data.strip()
+                vals = line.split(":")
+
+                # If, somehow, there is an extra colon in the data in the setting, we'll rejoin that
+                setting = vals[0]
+                setting = setting.strip()
+                if len(vals) > 2:
+                    data = ":".join(vals[1:])
+                else:
+                    data = vals[1]
+
+                data = data.strip()
             
-            if data in ("True", "False"):
+                if data.lower() in ("true", "false"):
 
-                data = bool(data)
+                    data = bool(data)
 
-            else:
+                else:
 
-                try:
-                    data = float(data)
+                    try:
+                        data = float(data)
 
-                except ValueError:
-                    pass
+                    except ValueError:
+                        pass
 
-            settings_dict[setting] = data
+                settings_dict[setting] = data
 
+    # Add any Dictionaries we created
+    for key, value in list(inner_dicts.items()):
+        settings_dict[key] = value
     # Now, we need to add some universal constants to the json
 
     # According to the original file, this converts "voltage to lbf to kN" and "1V = 100lbf for our sensor" whatever that means

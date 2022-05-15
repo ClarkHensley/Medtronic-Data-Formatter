@@ -1,4 +1,5 @@
 import os
+import sys
 from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,14 +22,11 @@ class StrikeSet:
         self.group = group
         self.name = strike
 
-        self.time_multiple = 0
+        try:
+            self.time_multiple = settings["TIME-DICT"][time_storage]
 
-        if(time_storage == "(s)"):
-            self.time_multiple = 1000000
-        elif(time_storage == "(ms)"):
-            self.time_multiple = 1000
-        elif(time_storage == "(us)"):
-            self.time_multiple = 1
+        except KeyError:
+            sys.exit(f"ERROR! Unknown Time Units found: {time_storage}\nPlease add this with the correct value to the TIME-DICT setting in the settings.txt file.")
 
         self.fitting_arr = fitting_arr
 
