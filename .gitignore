@@ -6,6 +6,9 @@
 !src/MedtronicDataFormatter.py
 src/Medtronic*
 
+# Don't need the results on github
+src/Results
+
 # Include the .gitignore
 !.gitignore
 # No other dotted directories/files
