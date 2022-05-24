@@ -44,6 +44,9 @@ def main():
 
     plt.rcParams.update({'font.size': settings["TEXT-SIZE"]})
 
+    #####
+    # SETTINGS NEED UPDATES
+    #####
     DATASET = settings["DATASET"]
 
     # Data Directory of this file
@@ -67,157 +70,38 @@ def main():
     # The strikes in each
     database = dictFromJson("database.json")
 
+    #####
+    # SETTINGS NEED UPDATES
+    #####
+
     # We'll keep a list of each dataset we're testing
     full_groups = {}
 
     # First, we're going to get all the data out of the CSVs for each test
-    dim2 = 0
+    max_num_tests = 0
     for group in groups_list:
         full_groups[group] = []
         CSV_dict = dict(database[group])
         FOLDER = CSV_dict["FOLDER"]
         TESTS = list(CSV_dict["TESTS"])
-        dim2 = max(dim2, len(TESTS))
+        max_num_tests = max(max_num_tests, len(TESTS))
         for test in TESTS:
             full_groups[group].append(os.path.join(FOLDER, test))
 
-    dim1 = len(groups_list)
+    num_groups = len(groups_list)
 
-    total_dataset = DataSet(dim1, dim2)
-
-    print("START")
-    print()
+    total_dataset = DataSet(num_groups, max_num_tests)
 
     # After getting the data from the Datasets directory, change directory back to <SOURCE>/Results/{DATASET} to easily save the results
     os.chdir(results_dir)
 
+    print("START")
+    print()
+
+
     for g, group in enumerate(full_groups):
-
         # Set up each group, one test at a time
-
-        print()
-        print(f"BEGINNING GROUP {group}")
-        print()
-        total_dataset.data_record[group] = {}
-
-        for t, test in enumerate(full_groups[group]):
-
-            csv_path = os.path.join(source_directory, test)
-
-            test = test.split(DELIMITER)[-1]
-            total_dataset.data_record[group][test] = {}
-
-            csv_list = os.listdir(csv_path)
-            csv_list = list(filter(lambda c: c.endswith(".csv"), csv_list))
-            csv_list.sort()
-
-            print()
-            print(f"BEGINNING TEST {test}")
-            print()
-
-            test_size = len(csv_list)
-
-            this_test = TestSet(test, test_size)
-
-            for s, csv in enumerate(csv_list):
-                print()
-                print(f"BEGINNING STRIKE {s + 1}")
-
-                this_strike_set = formatCSV(csv_path, csv, group, settings)
-
-                this_test.addStrikeSet(this_strike_set, s, settings)
-
-                for ind in range(len(this_test.strike_set.data) - 250):
-
-                    if this_test.strike_set.strike_triggered:
-                        break
-
-                    current_slope = this_test.getCurrentSlope(ind)
-
-                    # This finds if the strike has occured
-                    if np.all(this_test[ind - 250:ind + 250, 1] != "5") and float(this_test[ind, 1]) >= settings["FORCE-LOWER-REASONABLE"] / settings["kN"] and current_slope >= settings["SLOPE-LOWER-LIMIT"]:
-
-                        this_test.strike_set.strike_triggered = True
-                        subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
-                        for i, _ in enumerate(subset_arr):
-
-                            this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(subset_arr[i, 0]) - float(subset_arr[0, 0]))
-
-                            this_test.strike_set.impact_arr[i] = float(subset_arr[i, 1]) * settings["kN"]
-
-                            if this_test.strike_set.accelerometer_present:
-                                this_test.strike_set.accel_arr[i] = float(subset_arr[i, 2]) / settings["mV_to_a"]
-
-                        if this_test.strike_set.fitting_arr[ind]:
-                            this_test.strike_set.fitCurve(settings)
-
-                       this_test.characterizeWaveform(settings, s)
-
-                        this_test.strike_set.smootheCurve(settings)
-
-                        this_test.updateData()
-
-                if not this_test.strike_set.strike_triggered:
-                    print(f"WARNING: STRIKE {s + 1} WAS REJECTED: Strike Not Triggered")
-                    this_test.rejected_strikes.append(s)
-
-                else:
-                    this_test.strike_count += 1
-                    this_test.initialAppend()
-
-                print(f"ENDING STRIKE {s + 1}\n")
-                print()
-
-            this_test.finalize(settings)
-
-            total_dataset.calculateStats(this_test, (g, t))
-
-            total_dataset.data_record[group][test]["area"] = deepcopy(this_test.area_arr)
-            total_dataset.data_record[group][test]["force_max"] = deepcopy(this_test.force_max_arr)
-            total_dataset.data_record[group][test]["init_slope"] = deepcopy(this_test.init_slope_arr)
-            total_dataset.data_record[group][test]["wavelength"] = deepcopy(this_test.wavelength_arr)
-
-            this_test.plotAllData(results_dir, settings)
-
-            del this_test
-
-        test_list = []
-
-        for name in total_dataset.data_record[group]:
-            new_name = " ".join(name.split(" ")[1:])
-            test_list.append(new_name)
-
-        xlabel = "Test"
-
-        values = [
-                ("area", f"Area Under the Impulse Curve for {group}", "Area (kN * us)"),
-                ("force_max", f"Peak Force for {group}", "Force (kN)"),
-                ("init_slope", f"Initial Slope of the Wave for {group}", "Slope (kN / us)"),
-                ("wavelength", f"Duration of the Impact Event for {group}", "Duration (us)")
-                ]
-
-        for value in values:
-            (key, title, ylabel) = value
-
-            max_len = 0
-            for data in total_dataset.data_record[group].values():
-                max_len = max(max_len, len(data[key]))
-
-            data_dict = {}
-
-            for i, datum in enumerate(total_dataset.data_record[group].values()):
-                temp = np.empty((max_len))
-                for j, d in enumerate(datum[key]):
-                    temp[j] = d
-                data_dict[test_list[i]] = temp
-
-            data = pd.DataFrame(data=data_dict)
-
-            plotDataSet(title, xlabel, ylabel, data, results_dir, settings)
-
-        print()
-        print(f"ENDING GROUP {group}")
-        print()
+        total_dataset = processGroup(total_dataset, group, g, full_groups, source_directory, DELIMITER, settings)
 
     group_list = list(total_dataset.data_record.keys())
     xlabel = "Group"
@@ -266,8 +150,150 @@ def main():
     #final_df = pd.DataFrame(final_record, columns=final_csv_columns)
     #final_df.to_csv(os.path.join(results_dir, f"{DATASET}_record_data.csv"), encoding="utf-8")
 
-    print()
     print("DONE")
+
+def processGroup(total_dataset, group, g, full_groups, source_directory, DELIMITER, settings):
+    # Process each group, test by test, plot and store data afterwards
+    print(f"BEGINNING GROUP {group}")
+    print()
+    total_dataset.data_record[group] = {}
+
+    for t, test in enumerate(full_groups[group]):
+        total_dataset = processTest(source_directory, group, g, test, t, total_dataset, DELIMITER, settings)
+
+
+    test_list = []
+
+    for name in total_dataset.data_record[group]:
+        new_name = " ".join(name.split(" ")[1:])
+        test_list.append(new_name)
+
+    xlabel = "Test"
+
+    values = [
+            ("area", f"Area Under the Impulse Curve for {group}", "Area (kN * us)"),
+            ("force_max", f"Peak Force for {group}", "Force (kN)"),
+            ("init_slope", f"Initial Slope of the Wave for {group}", "Slope (kN / us)"),
+            ("wavelength", f"Duration of the Impact Event for {group}", "Duration (us)")
+            ]
+
+    for value in values:
+        (key, title, ylabel) = value
+
+        max_len = 0
+        for data in total_dataset.data_record[group].values():
+            max_len = max(max_len, len(data[key]))
+
+        data_dict = {}
+
+        for i, datum in enumerate(total_dataset.data_record[group].values()):
+            temp = np.empty((max_len))
+            for j, d in enumerate(datum[key]):
+                temp[j] = d
+            data_dict[test_list[i]] = temp
+
+        data = pd.DataFrame(data=data_dict)
+
+        plotDataSet(title, xlabel, ylabel, data, results_dir, settings)
+
+    print(f"ENDING GROUP {group}")
+    print()
+
+    return total_dataset
+
+def processTest(source_directory, group, g, test, t, total_dataset, DELIMITER, settings):
+    # Process each test, gather average data across all strikes per test, Plot data after processing
+    csv_path = os.path.join(source_directory, test)
+
+    test = test.split(DELIMITER)[-1]
+    total_dataset.data_record[group][test] = {}
+
+    csv_list = os.listdir(csv_path)
+    csv_list = list(filter(lambda c: c.endswith(".csv"), csv_list))
+    csv_list.sort()
+
+    print(f"BEGINNING TEST {test}")
+    print()
+
+    test_size = len(csv_list)
+
+    this_test = TestSet(test, test_size)
+
+    for s, csv in enumerate(csv_list):
+        this_test = processStrike(this_test, s, csv, csv_path, group, settings)
+
+    this_test.finalize(settings)
+
+    total_dataset.calculateStats(this_test, (g, t))
+
+    total_dataset.data_record[group][test]["area"] = deepcopy(this_test.area_arr)
+    total_dataset.data_record[group][test]["force_max"] = deepcopy(this_test.force_max_arr)
+    total_dataset.data_record[group][test]["init_slope"] = deepcopy(this_test.init_slope_arr)
+    total_dataset.data_record[group][test]["wavelength"] = deepcopy(this_test.wavelength_arr)
+
+    this_test.plotAllData(settings)
+
+    del this_test
+
+    return total_dataset
+
+def processStrike(this_test, s, csv, csv_path, group, settings):
+    # Go through each CSV, find and process each strike, or warn about a missing strike
+    print(f"BEGINNING STRIKE {s + 1}")
+
+    this_strike_set = formatCSV(csv_path, csv, group, settings)
+
+    this_test.addStrikeSet(this_strike_set, s, settings)
+
+    for ind in range(len(this_test.strike_set.data) - 250):
+
+        if this_test.strike_set.strike_triggered:
+            break
+
+        current_slope = this_test.getCurrentSlope(ind)
+
+        # This finds if the strike has occured
+        if np.all(this_test[ind - 250:ind + 250, 1] != "5") and float(this_test[ind, 1]) >= settings["FORCE-LOWER-REASONABLE"] / settings["kN"] and current_slope >= settings["SLOPE-LOWER-LIMIT"]:
+
+            this_test = processStrikeSegment(s, ind, this_test, settings)
+
+
+    if not this_test.strike_set.strike_triggered:
+        print(f"WARNING: STRIKE {s + 1} WAS REJECTED: Strike Not Triggered")
+        this_test.rejected_strikes.append(s)
+
+    else:
+        this_test.strike_count += 1
+        this_test.initialAppend()
+
+    print(f"ENDING STRIKE {s + 1}\n")
+    print()
+
+    return this_test
+
+def processStrikeSegment(s, ind, this_test, settings):
+    # Gather the data from the part of the CSV where the strike occurs, clean up the data, store it in a separate CSV, and return
+    this_test.strike_set.strike_triggered = True
+    subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
+    for i, _ in enumerate(subset_arr):
+
+        this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(subset_arr[i, 0]) - float(subset_arr[0, 0]))
+
+        this_test.strike_set.impact_arr[i] = float(subset_arr[i, 1]) * settings["kN"]
+
+        if this_test.strike_set.accelerometer_present:
+            this_test.strike_set.accel_arr[i] = float(subset_arr[i, 2]) / settings["mV_to_a"]
+
+    if this_test.strike_set.fitting_arr[ind]:
+        this_test.strike_set.fitCurve(settings)
+
+    this_test.characterizeWaveform(settings, s)
+
+    this_test.strike_set.smootheCurve(settings)
+
+    this_test.updateData()
+
+    return this_test
 
 def generateSettings(directory):
 

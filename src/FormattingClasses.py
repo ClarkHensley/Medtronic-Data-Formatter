@@ -115,25 +115,21 @@ class StrikeSet:
         steps_mean = stats.mean(steps)
         steps_stdev = stats.stdev(steps)
 
-        outlier_threshold = steps_mean + 2 * steps_stdev
-        print(f"{outlier_threshold=}")
-
         for i in range(1, self.arrsize):
             # Removal based on both the outlier-threshold value and chauvenet's criterion
             if 1 / (2 * self.arrsize) > erfc(abs((self.impact_arr[i] - self.impact_arr[i - 1]) - steps_mean)) / steps_stdev or 1 / (2 * self.arrsize) > erfc(abs(self.impact_arr[i] - impact_mean) / impact_stdev):
                 mask[i] = False
 
         prev_i = -1
-
         for i in range(len(mask)):
             if mask[i] is False:
                 if prev_i == -1:
                     prev_i = i
-
-                else:
-                    for j in range(prev_i, i + 1):
-                        mask[j] = False
-                    prev_i = -1
+            elif prev_i != -1:
+                for j in range(prev_i, i):
+                    print(j)
+                    mask[j] = False
+                prev_i = -1
 
         self.impact_arr = self.impact_arr[mask]
         self.time_arr = self.time_arr[mask]
@@ -255,7 +251,7 @@ class TestSet:
                     wave_duration = True
                     wave_start = ind
 
-    def plotAllData(self, directory, settings):
+    def plotAllData(self, settings):
 
         # Plot Force v. Time
         time_v_force_data = {
@@ -299,14 +295,14 @@ class TestSet:
                 time_v_accel_data["xdata"].append(strike.time_arr)
                 time_v_accel_data["ydata"].append(strike.accel_arr)
     
-        self.plotData(time_v_force_data, directory, settings)
+        self.plotData(time_v_force_data, settings)
 
-        self.plotData(strike_v_max_force_data, directory, settings)
+        self.plotData(strike_v_max_force_data, settings)
 
         if strike.accelerometer_present:
-            self.plotData(time_v_accel_data, directory, settings)
+            self.plotData(time_v_accel_data, settings)
 
-    def plotData(self, data, directory, settings):
+    def plotData(self, data, settings):
 
         plt.figure(data["title"], figsize=settings["fig_size"])
         plt.grid(True)
@@ -328,45 +324,45 @@ class TestSet:
             plt.legend(loc="upper left")
 
         plt.tight_layout()
-        plt.savefig(os.path.join(directory, data["title"]) + ".png")
+        plt.savefig(data["title"] + ".png")
         plt.show()
         plt.close("all")
 
 
 class DataSet:
 
-    def __init__(self, dim1, dim2):
+    def __init__(self, num_groups, max_num_tests):
 
         # 3-dimensional Dictionary to store the actual data
         self.data_record = {}
 
         # Self.data_record is keyed by group names
-        # self.data_record[group] is keyed by tests
+        # self.data_record[grotestsup] is keyed by tests
         # self.data_record[group][test] is keyed by one of (area, force_max, init_slope, wavelength)
 
         # Data Means
-        self.area_mean_arr = np.zeros(shape=(dim1, dim2))
-        self.force_max_mean_arr = np.zeros(shape=(dim1, dim2))
-        self.init_slope_mean_arr = np.zeros(shape=(dim1, dim2))
-        self.wavelength_mean_arr = np.zeros(shape=(dim1, dim2))
+        self.area_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.force_max_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.init_slope_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.wavelength_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
 
         # Data STDevs
-        self.area_stdev_arr = np.zeros(shape=(dim1, dim2))
-        self.force_max_stdev_arr = np.zeros(shape=(dim1, dim2))
-        self.init_slope_stdev_arr = np.zeros(shape=(dim1, dim2))
-        self.wavelength_stdev_arr = np.zeros(shape=(dim1, dim2))
+        self.area_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.force_max_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.init_slope_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.wavelength_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
 
     def calculateStats(self, test, i):
 
-        self.area_mean_arr[i] = np.mean(test.area_arr)
-        self.area_stdev_arr[i] = np.std(test.area_arr)
+        self.area_mean_arr[i] = stats.mean(test.area_arr)
+        self.area_stdev_arr[i] = stats.stdev(test.area_arr)
 
-        self.force_max_mean_arr[i] = np.mean(test.force_max_arr)
-        self.force_max_stdev_arr[i] = np.std(test.force_max_arr)
+        self.force_max_mean_arr[i] = stats.mean(test.force_max_arr)
+        self.force_max_stdev_arr[i] = stats.stdev(test.force_max_arr)
 
-        self.init_slope_mean_arr[i] = np.mean(test.init_slope_arr)
-        self.init_slope_stdev_arr[i] = np.std(test.init_slope_arr)
+        self.init_slope_mean_arr[i] = stats.mean(test.init_slope_arr)
+        self.init_slope_stdev_arr[i] = stats.stdev(test.init_slope_arr)
 
-        self.wavelength_mean_arr[i] = np.mean(test.wavelength_arr)
-        self.wavelength_stdev_arr[i] = np.std(test.wavelength_arr)
+        self.wavelength_mean_arr[i] = stats.mean(test.wavelength_arr)
+        self.wavelength_stdev_arr[i] = stats.stdev(test.wavelength_arr)
 

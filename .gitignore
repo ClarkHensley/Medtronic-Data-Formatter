@@ -7,7 +7,7 @@
 src/Medtronic*
 
 # Don't need the results on github
-src/Results
+src/Results/*
 
 # Include the .gitignore
 !.gitignore
