@@ -1,7 +1,11 @@
 import os
 import sys
+
 from copy import deepcopy
+from scipy.special import erfc
+
 import numpy as np
+import statistics as stats
 import matplotlib.pyplot as plt
 
 
@@ -32,14 +36,13 @@ class StrikeSet:
 
         self.data = data
         self.accelerometer_present = len(data[0]) == 3
-        self.timedelta = round(float(data[1, 0]) - float(data[0, 0]), 2) * self.time_multiple
+        self.timedelta = (float(data[1, 0]) - float(data[0, 0])) * self.time_multiple
 
         self.inc = settings["timestep"] / (2 * self.timedelta)
 
         self.arrsize = 2 * int(self.inc) + 2
 
         self.ratio = self.inc / 12000
-
 
         self.time_arr = np.zeros(shape=(self.arrsize))
         self.impact_arr = np.zeros(shape=(self.arrsize))
@@ -60,7 +63,6 @@ class StrikeSet:
     def fitCurve(self, settings):
 
         start_interpolation = False
-        delta = (self.time_arr[1] - self.time_arr[0]) * self.time_multiple
         start_index = 0
         end_index = 0
 
@@ -90,7 +92,7 @@ class StrikeSet:
                         ind = new_ind
 
             else:
-                if abs(next_val - previous_val) / delta >= 10:
+                if abs(next_val - previous_val) / self.timedelta >= 10:
                     start_interpolation = True
                     start_index = ind - settings["residue"]
 
@@ -101,8 +103,24 @@ class StrikeSet:
 
         mask = [True for _ in range(self.arrsize)]
 
+        # Calculate the Mean and STDdev of the impact
+        impact_mean = stats.mean(self.impact_arr)
+        impact_stdev = stats.stdev(self.impact_arr)
+
+        # Dynamically calculate the outlier threshold per-strike
+        steps =[]
         for i in range(1, self.arrsize):
-            if abs(self.impact_arr[i] - self.impact_arr[i - 1]) > settings["OUTLIER-THRESHOLD"]:
+            steps.append(self.impact_arr[i] - self.impact_arr[i - 1])
+
+        steps_mean = stats.mean(steps)
+        steps_stdev = stats.stdev(steps)
+
+        outlier_threshold = steps_mean + 2 * steps_stdev
+        print(f"{outlier_threshold=}")
+
+        for i in range(1, self.arrsize):
+            # Removal based on both the outlier-threshold value and chauvenet's criterion
+            if 1 / (2 * self.arrsize) > erfc(abs((self.impact_arr[i] - self.impact_arr[i - 1]) - steps_mean)) / steps_stdev or 1 / (2 * self.arrsize) > erfc(abs(self.impact_arr[i] - impact_mean) / impact_stdev):
                 mask[i] = False
 
         prev_i = -1
@@ -122,7 +140,6 @@ class StrikeSet:
 
         if self.accelerometer_present:
             self.accel_arr = self.accel_arr[mask]
-
 
 class TestSet:
     """
@@ -169,7 +186,7 @@ class TestSet:
         if self.strike_set is not None:
             del self.strike_set
             self.strike_set = None
-        
+
         self.current_ind = ind
 
         self.strike_set = strike_set
@@ -291,9 +308,8 @@ class TestSet:
 
     def plotData(self, data, directory, settings):
 
-        plt.figure(data["title"])
+        plt.figure(data["title"], figsize=settings["fig_size"])
         plt.grid(True)
-        plt.tight_layout()
         plt.title(data["title"])
         plt.xlabel(data["xlabel"])
         plt.ylabel(data["ylabel"])
@@ -311,8 +327,9 @@ class TestSet:
         if data["legend"]:
             plt.legend(loc="upper left")
 
-        plt.show()
+        plt.tight_layout()
         plt.savefig(os.path.join(directory, data["title"]) + ".png")
+        plt.show()
         plt.close("all")
 
 

@@ -29,17 +29,18 @@ from FormattingClasses import StrikeSet, TestSet, DataSet
 
 def main():
 
+    # "\" for Windows
+    if os.name == "nt":
+        DELIMITER = "\\"
+    # "/" for Mac/Linux
+    else:
+        DELIMITER = "/"
+
     # Directory of this file
     source_directory = os.path.dirname(os.path.realpath(__file__))
 
-    settings_directory = os.path.join(source_directory, "settings")
-    os.chdir(settings_directory)
-
-    # Firstly, generate the settings
-    formatData(settings_directory)
-
-    # And read from the data json
-    settings = dictFromJson("settings.json")
+    # Extract settings from text file
+    settings = generateSettings(source_directory)
 
     plt.rcParams.update({'font.size': settings["TEXT-SIZE"]})
 
@@ -47,15 +48,15 @@ def main():
 
     # Data Directory of this file
     data_directory = os.path.join(source_directory, "Datasets")
-    os.chdir(data_directory)
+    os.chdir(f"{data_directory}")
 
     if not os.path.exists(os.path.join(source_directory, "Results")):
         os.mkdir(os.path.join(source_directory, "Results"))
 
-    if not os.path.exists(os.path.join(source_directory, f"Results/{DATASET}")):
-        os.mkdir(os.path.join(source_directory, f"Results/{DATASET}"))
+    if not os.path.exists(os.path.join(os.path.join(source_directory, "Results"), f"{DATASET}")):
+        os.mkdir(os.path.join(os.path.join(source_directory, "Results"), f"{DATASET}"))
 
-    results_dir = os.path.join(source_directory, f"Results/{DATASET}")
+    results_dir = os.path.join(os.path.join(source_directory, "Results"), f"{DATASET}")
 
     # The list of "runs" which includes multiple tests each
     groups = dictFromJson("groups.json")
@@ -103,7 +104,7 @@ def main():
 
             csv_path = os.path.join(source_directory, test)
 
-            test = test.split("/")[-1]
+            test = test.split(DELIMITER)[-1]
             total_dataset.data_record[group][test] = {}
 
             csv_list = os.listdir(csv_path)
@@ -119,12 +120,11 @@ def main():
             this_test = TestSet(test, test_size)
 
             for s, csv in enumerate(csv_list):
-
                 print()
                 print(f"BEGINNING STRIKE {s + 1}")
 
                 this_strike_set = formatCSV(csv_path, csv, group, settings)
-                
+
                 this_test.addStrikeSet(this_strike_set, s, settings)
 
                 for ind in range(len(this_test.strike_set.data) - 250):
@@ -139,7 +139,6 @@ def main():
 
                         this_test.strike_set.strike_triggered = True
                         subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
-
                         for i, _ in enumerate(subset_arr):
 
                             this_test.strike_set.time_arr[i] = this_test.strike_set.time_multiple * (float(subset_arr[i, 0]) - float(subset_arr[0, 0]))
@@ -152,7 +151,7 @@ def main():
                         if this_test.strike_set.fitting_arr[ind]:
                             this_test.strike_set.fitCurve(settings)
 
-                        this_test.characterizeWaveform(settings, s)
+                       this_test.characterizeWaveform(settings, s)
 
                         this_test.strike_set.smootheCurve(settings)
 
@@ -165,14 +164,6 @@ def main():
                 else:
                     this_test.strike_count += 1
                     this_test.initialAppend()
-
-                    #  if settings["FORCE-UPPER-REASONABLE"] >= this_test.force_max_arr[s] >= settings["FORCE-LOWER-REASONABLE"] and this_test.area_arr[s] >= settings["AREA-LOWER-LIMIT"]:
-                    #      this_test.strike_count += 1
-                    #      this_test.initialAppend()
-                    #
-                    #  else:
-                    #      print(f"WARNING: STRIKE {s + 1} WAS REJECTED: Out Of Bounds")
-                    #      this_test.rejected_strikes.append(s)
 
                 print(f"ENDING STRIKE {s + 1}\n")
                 print()
@@ -278,7 +269,7 @@ def main():
     print()
     print("DONE")
 
-def formatData(directory):
+def generateSettings(directory):
 
     # Absolute Path of this file
     settings_file = os.path.join(directory, "settings.txt")
@@ -322,10 +313,11 @@ def formatData(directory):
                     data = vals[1]
 
                 data = data.strip()
-            
-                if data.lower() in ("true", "false"):
 
-                    data = bool(data)
+                bool_data = {"true": True, "false": False}
+                if data.lower() in bool_data.keys():
+
+                    data = bool_data[data.lower()]
 
                 else:
 
@@ -363,10 +355,9 @@ def formatData(directory):
     settings_dict["timestep"] = timestep
     settings_dict["residue"] = residue
 
-    # Dump to json
-    with open("settings.json", "w") as sj:
-        json.dump(settings_dict, sj)
+    settings_dict["fig_size"] = (19.2, 10.8)
 
+    return settings_dict
 
 def dictFromJson(file):
     """ Attempt to open a .json file, which will be converted into a python Dictionary."""
@@ -424,9 +415,8 @@ def formatCSV(path, csv, group, settings):
 
 def plotDataSet(title, xlabel, ylabel, new_data, directory, settings):
 
-    plt.figure(title)
+    plt.figure(title, figsize=settings["fig_size"])
     plt.grid(True)
-    plt.tight_layout()
     plt.title(title)
 
     plt.rc("axes", titlesize=settings["TITLE-SIZE"])
@@ -434,14 +424,12 @@ def plotDataSet(title, xlabel, ylabel, new_data, directory, settings):
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
 
-    if settings["PLOT-TYPE"] == "BAR":
-        plt.boxplot(new_data)
+    print(new_data)
+    sns.violinplot(data=new_data)
 
-    elif settings["PLOT-TYPE"] == "VIOLIN":
-        sns.violinplot(data=new_data)
-
-    plt.show()
+    plt.tight_layout()
     plt.savefig(os.path.join(directory, title) + ".png")
+    plt.show()
     plt.close("all")
 
 

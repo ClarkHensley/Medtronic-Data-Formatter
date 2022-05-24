@@ -13,7 +13,7 @@
 # Groupsselected
 # Medtronic-Data-20210806
 # TroubleShooting
-#
+
 DATASET: Groupsselected
 
 # Font size of Graph Titles, default 30
@@ -23,11 +23,8 @@ LABEL-SIZE: 22
 # Font Size of Graph Text, default 18
 TEXT-SIZE: 18
 
-# Type of Plot, either VIOLIN or BAR
-PLOT-TYPE: VIOLIN
-
 # Threshold to reject outliers
-OUTLIER-THRESHOLD: 0.75
+# OUTLIER-THRESHOLD: 0.5
 
 # X-Axis offset, default 75
 TIME-SHIFT: 75
