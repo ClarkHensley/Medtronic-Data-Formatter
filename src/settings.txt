@@ -14,7 +14,7 @@
 # Medtronic-Data-20210806
 # TroubleShooting
 
-DATASET: Groupsselected
+DATASET: Medtronic-Data-20210806
 
 # Font size of Graph Titles, default 30
 TITLE-SIZE: 30
@@ -23,21 +23,14 @@ LABEL-SIZE: 22
 # Font Size of Graph Text, default 18
 TEXT-SIZE: 18
 
-# Threshold to reject outliers
-# OUTLIER-THRESHOLD: 0.5
-
 # X-Axis offset, default 75
 TIME-SHIFT: 75
 
 # Lower Level Limit for Force, if the data are noisy, default 0.1
 FORCE-LOWER-BOUND: 0.1
 
-# Reasonable Expected Force Values, default 3, 20
+# Reasonable Expected Force Values, default 3
 FORCE-LOWER-REASONABLE: 3
-FORCE-UPPER-REASONABLE: 20
-
-# Reasonably Expected Area, default 250
-AREA-LOWER-LIMIT: 250
 
 # Reasonably Expected Slope, default 0
 SLOPE-LOWER-LIMIT: 0
@@ -50,9 +43,6 @@ LEGEND: False
 
 # Boolean to show "average string counts", default False
 SHOW-STRING-COUNT: False
-
-# Boolean to show "n = [testcount]", default False
-SHOW-N-COUNT: False
 
 # Set of Time Units mapped to the proper conversion factor to Microseconds (us)
 TIME-DICT: {

@@ -2,11 +2,8 @@
 # Don't include the zipped version of the final implementation
 *.zip
 
-# No need to include all the CSVs on Github
-!src/MedtronicDataFormatter.py
-src/Medtronic*
-
-# Don't need the results on github
+# No need to include all the CSVs or Results on GitHub
+src/Tests/*
 src/Results/*
 
 # Include the .gitignore

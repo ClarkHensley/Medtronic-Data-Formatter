@@ -1,9 +1,0 @@
-- Program Use Instructions -
-
-1.	Place the folder 'Dataformater' in the file location shown below. Change [username] to your username. Example - C:\Users\jab12\Documents\Waveforms
-	C:\Users\[username]\Documents\Waveforms
-2.
-
-- Program Use Guidelines -	
-1.	Groupsselected.ini designates what groups of tests will be run during the current runthrough
-2.	database.ini contains the parameters used for each group analyzed as well as what tests will be analyzed in that group

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Updated Medtronic Data Formatter
 Maintainer: Clark Hensley (ch3136)
@@ -6,11 +7,11 @@ Upstream: https://github.com/ClarkHensley/Medtronic-Data-Formatter
 
 import os
 import sys
-import json
 import random
 
 import numpy as np
 import pandas as pd
+import csv as csv_lib
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -18,16 +19,17 @@ import seaborn as sns
 
 from copy import deepcopy
 from FormattingClasses import StrikeSet, TestSet, DataSet
-
+from SettingsGenerator import generateSettings, generateDatasetsAndGroups
 
 ###############################################################################
 # Structure of the filesystem:
-#   Runs include multiple Tests
-#       Tests include multipe CSV files, multiple Strikes
+#   Datasets include multiple Groups
+#       Groups include multiple Tests
+#           Tests include multiple Strikes (That is, multiple CSV files)
 ###############################################################################
 
 
-def main():
+def extractFromAll(settings=None, datasets_dict=None, groups_dict=None):
 
     # "\" for Windows
     if os.name == "nt":
@@ -40,39 +42,27 @@ def main():
     source_directory = os.path.dirname(os.path.realpath(__file__))
 
     # Extract settings from text file
-    settings = generateSettings(source_directory)
+    if settings is None:
+        settings = generateSettings(source_directory)
+
+    if datasets_dict is None or groups_dict is None:
+        datasets_dict, groups_dict = generateDatasetsAndGroups(source_directory)
 
     plt.rcParams.update({'font.size': settings["TEXT-SIZE"]})
 
-    #####
-    # SETTINGS NEED UPDATES
-    #####
-    DATASET = settings["DATASET"]
+    dataset = settings["DATASET"]
+    groups_list = datasets_dict[dataset]
 
-    # Data Directory of this file
-    data_directory = os.path.join(source_directory, "Datasets")
-    os.chdir(f"{data_directory}")
+    tests_directory = os.path.join(source_directory, "Tests")
 
-    if not os.path.exists(os.path.join(source_directory, "Results")):
-        os.mkdir(os.path.join(source_directory, "Results"))
+    main_results_folder = os.path.join(source_directory, "Results")
+    if not os.path.exists(main_results_folder):
+        os.mkdir(main_results_folder)
 
-    if not os.path.exists(os.path.join(os.path.join(source_directory, "Results"), f"{DATASET}")):
-        os.mkdir(os.path.join(os.path.join(source_directory, "Results"), f"{DATASET}"))
+    results_dir = os.path.join(main_results_folder, f"{dataset}")
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
 
-    results_dir = os.path.join(os.path.join(source_directory, "Results"), f"{DATASET}")
-
-    # The list of "runs" which includes multiple tests each
-    groups = dictFromJson("groups.json")
-
-    # The list of those tests
-    groups_list = groups[DATASET]
-
-    # The strikes in each
-    database = dictFromJson("database.json")
-
-    #####
-    # SETTINGS NEED UPDATES
-    #####
 
     # We'll keep a list of each dataset we're testing
     full_groups = {}
@@ -81,28 +71,28 @@ def main():
     max_num_tests = 0
     for group in groups_list:
         full_groups[group] = []
-        CSV_dict = dict(database[group])
-        FOLDER = CSV_dict["FOLDER"]
-        TESTS = list(CSV_dict["TESTS"])
-        max_num_tests = max(max_num_tests, len(TESTS))
-        for test in TESTS:
-            full_groups[group].append(os.path.join(FOLDER, test))
+        tests_dict = groups_dict[group]
+        tests = tests_dict["tests"]
+        max_num_tests = max(max_num_tests, len(tests))
+        for test in tests:
+            full_groups[group].append(os.path.join(tests_directory, test))
 
     num_groups = len(groups_list)
 
     total_dataset = DataSet(num_groups, max_num_tests)
 
     # After getting the data from the Datasets directory, change directory back to <SOURCE>/Results/{DATASET} to easily save the results
-    os.chdir(results_dir)
 
     print("START")
-    print()
-
 
     for g, group in enumerate(full_groups):
         # Set up each group, one test at a time
-        total_dataset = processGroup(total_dataset, group, g, full_groups, source_directory, DELIMITER, settings)
+        total_dataset = extractFromGroup(total_dataset, group, g, full_groups, source_directory, DELIMITER, results_dir, settings)
 
+    print("DONE")
+    raise SystemExit
+
+    ###############################################3
     group_list = list(total_dataset.data_record.keys())
     xlabel = "Group"
 
@@ -151,17 +141,25 @@ def main():
     #final_df.to_csv(os.path.join(results_dir, f"{DATASET}_record_data.csv"), encoding="utf-8")
 
     print("DONE")
+    #########################################
 
-def processGroup(total_dataset, group, g, full_groups, source_directory, DELIMITER, settings):
-    # Process each group, test by test, plot and store data afterwards
-    print(f"BEGINNING GROUP {group}")
+def extractFromGroup(total_dataset, group, g, full_groups, source_directory, DELIMITER, results_dir, settings):
+    # Extrac data From each group, test by test, plot and store data afterwards
     print()
+    print(f"\tBEGINNING GROUP {group}")
+
+    current_group_dir = os.path.join(results_dir, f"{group}")
+    if not os.path.exists(current_group_dir):
+        os.mkdir(current_group_dir)
+
     total_dataset.data_record[group] = {}
 
     for t, test in enumerate(full_groups[group]):
-        total_dataset = processTest(source_directory, group, g, test, t, total_dataset, DELIMITER, settings)
+        total_dataset = extractFromTest(source_directory, group, g, test, t, total_dataset, DELIMITER, current_group_dir, settings)
 
+    return total_dataset
 
+    ##################
     test_list = []
 
     for name in total_dataset.data_record[group]:
@@ -200,9 +198,10 @@ def processGroup(total_dataset, group, g, full_groups, source_directory, DELIMIT
     print()
 
     return total_dataset
+    #########################
 
-def processTest(source_directory, group, g, test, t, total_dataset, DELIMITER, settings):
-    # Process each test, gather average data across all strikes per test, Plot data after processing
+def extractFromTest(source_directory, group, g, test, t, total_dataset, DELIMITER, current_group_dir, settings):
+    # Extract data from each test, gather average data across all strikes per test
     csv_path = os.path.join(source_directory, test)
 
     test = test.split(DELIMITER)[-1]
@@ -212,16 +211,26 @@ def processTest(source_directory, group, g, test, t, total_dataset, DELIMITER, s
     csv_list = list(filter(lambda c: c.endswith(".csv"), csv_list))
     csv_list.sort()
 
-    print(f"BEGINNING TEST {test}")
     print()
+    print(f"\t\tBEGINNING TEST {test}")
+    print()
+
+    current_test_dir = os.path.join(current_group_dir, f"{test}")
+    if not os.path.exists(current_test_dir):
+        os.mkdir(current_test_dir)
+    os.chdir(current_test_dir)
 
     test_size = len(csv_list)
 
     this_test = TestSet(test, test_size)
 
     for s, csv in enumerate(csv_list):
-        this_test = processStrike(this_test, s, csv, csv_path, group, settings)
+        this_test = extractFromStrike(this_test, s, csv, csv_path, group, settings)
 
+    del this_test
+    return total_dataset
+
+    ##################
     this_test.finalize(settings)
 
     total_dataset.calculateStats(this_test, (g, t))
@@ -236,10 +245,11 @@ def processTest(source_directory, group, g, test, t, total_dataset, DELIMITER, s
     del this_test
 
     return total_dataset
+    ##################
 
-def processStrike(this_test, s, csv, csv_path, group, settings):
-    # Go through each CSV, find and process each strike, or warn about a missing strike
-    print(f"BEGINNING STRIKE {s + 1}")
+def extractFromStrike(this_test, s, csv, csv_path, group, settings):
+    # Go through each CSV, find and extract data from each strike, or warn about a missing strike
+    print(f"\t\t\tBEGINNING STRIKE {s + 1}")
 
     this_strike_set = formatCSV(csv_path, csv, group, settings)
 
@@ -255,11 +265,21 @@ def processStrike(this_test, s, csv, csv_path, group, settings):
         # This finds if the strike has occured
         if np.all(this_test[ind - 250:ind + 250, 1] != "5") and float(this_test[ind, 1]) >= settings["FORCE-LOWER-REASONABLE"] / settings["kN"] and current_slope >= settings["SLOPE-LOWER-LIMIT"]:
 
-            this_test = processStrikeSegment(s, ind, this_test, settings)
+            subset_arr = this_test.strike_set[(ind - int(this_test.strike_set.inc) + int(this_test.shift)): (ind + int(this_test.strike_set.inc) + int(this_test.shift))]
+            with open(f"RAW-{csv}", "w", newline="") as newcsv:
+                writer = csv_lib.writer(newcsv)
+                writer.writerows(subset_arr)
+            #this_test = processStrikeSegment(s, ind, this_test, settings + int(this_test.strike_set.inc) + int(this_test.shift))
+            return this_test
 
 
     if not this_test.strike_set.strike_triggered:
-        print(f"WARNING: STRIKE {s + 1} WAS REJECTED: Strike Not Triggered")
+        print()
+        print(f"\t\t\t\tWARNING: STRIKE {s + 1} WAS REJECTED: Strike Not Triggered")
+        print()
+        return this_test
+
+    ##################
         this_test.rejected_strikes.append(s)
 
     else:
@@ -270,6 +290,7 @@ def processStrike(this_test, s, csv, csv_path, group, settings):
     print()
 
     return this_test
+    ##################
 
 def processStrikeSegment(s, ind, this_test, settings):
     # Gather the data from the part of the CSV where the strike occurs, clean up the data, store it in a separate CSV, and return
@@ -294,111 +315,6 @@ def processStrikeSegment(s, ind, this_test, settings):
     this_test.updateData()
 
     return this_test
-
-def generateSettings(directory):
-
-    # Absolute Path of this file
-    settings_file = os.path.join(directory, "settings.txt")
-
-    with open(settings_file, "r") as sf:
-        settings = sf.readlines()
-
-    # format each line
-    settings_dict = {}
-    inner_dicts = {}
-    started_dict = False
-    current_dict = ""
-    for line in settings:
-        if line == "" or line.isspace() or line.startswith("#"):
-            pass
-
-        elif "{" in line:
-            started_dict = True
-            current_dict = line.split(":")[0]
-            inner_dicts[current_dict] = {}
-        elif "}" in line:
-            started_dict = False
-            current_dict = ""
-        else:
-            if started_dict:
-                vals = line.split(",")
-                key = vals[0].strip()
-                value = int(vals[1])
-                inner_dicts[current_dict][key] = value
-
-            else:
-
-                vals = line.split(":")
-
-                # If, somehow, there is an extra colon in the data in the setting, we'll rejoin that
-                setting = vals[0]
-                setting = setting.strip()
-                if len(vals) > 2:
-                    data = ":".join(vals[1:])
-                else:
-                    data = vals[1]
-
-                data = data.strip()
-
-                bool_data = {"true": True, "false": False}
-                if data.lower() in bool_data.keys():
-
-                    data = bool_data[data.lower()]
-
-                else:
-
-                    try:
-                        data = float(data)
-
-                    except ValueError:
-                        pass
-
-                settings_dict[setting] = data
-
-    # Add any Dictionaries we created
-    for key, value in list(inner_dicts.items()):
-        settings_dict[key] = value
-    # Now, we need to add some universal constants to the json
-
-    # According to the original file, this converts "voltage to lbf to kN" and "1V = 100lbf for our sensor" whatever that means
-    kN = 4.44822162
-
-    # "converts milli-volts to acceleration"
-    mV_to_a = 1.090
-
-    # "picoscope range for the acceleration"
-    max_av = 10
-
-    # Sampling time rate (microseconds)
-    timestep = 300
-
-    # Residue for force
-    residue = 1000
-
-    settings_dict["kN"] = kN
-    settings_dict["mV_to_a"] = mV_to_a
-    settings_dict["max_av"] = max_av
-    settings_dict["timestep"] = timestep
-    settings_dict["residue"] = residue
-
-    settings_dict["fig_size"] = (19.2, 10.8)
-
-    return settings_dict
-
-def dictFromJson(file):
-    """ Attempt to open a .json file, which will be converted into a python Dictionary."""
-
-    # Attempt to create a dictionary from the file and return it
-    try:
-        with open(file, "r") as h:
-            h_content = h.read()
-            temp = json.loads(h_content)
-
-        return temp
-
-    except FileNotFoundError:
-        sys.exit(f"{file} JSON file could not be found.")
-
 
 def formatCSV(path, csv, group, settings):
     """
@@ -460,5 +376,5 @@ def plotDataSet(title, xlabel, ylabel, new_data, directory, settings):
 
 
 if __name__ == "__main__":
-    main()
+    extractFromAll()
 

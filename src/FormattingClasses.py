@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import sys
 
@@ -52,8 +54,6 @@ class StrikeSet:
 
         self.strike_triggered = False
 
-        self.threshold = []
-
     def __getitem__(self, key):
         return self.data[key]
 
@@ -101,25 +101,45 @@ class StrikeSet:
 
     def smootheCurve(self, settings):
 
-        mask = [True for _ in range(self.arrsize)]
+        # Let's set these per-test
+        threshold = 2
+        iterations = 10
 
-        # Calculate the Mean and STDdev of the impact
+        for _ in range(iterations):
+            old_size = len(self.impact_arr)
+            slopes = np.zeros(shape=(old_size))
+            for i in range(1, old_size):
+                slopes[i] = (self.impact_arr[i] - self.impact_arr[i - 1]) / self.timedelta
+
+            mask = [True for _ in range(old_size)]
+
+            for i in range(old_size):
+                if abs(slopes[i]) > threshold or (slopes[i] == 0 and self.impact_arr[i] != 0):
+                   mask[i] = False
+
+            self.fitToMask(mask)
+            new_arrsize = len(self.impact_arr)
+            print(new_arrsize)
+            if new_arrsize == old_size:
+                break
+
+        new_mask = [True for _ in range(new_arrsize)]
+        # Calculate the Mean and STDev of the impact
         impact_mean = stats.mean(self.impact_arr)
         impact_stdev = stats.stdev(self.impact_arr)
 
-        # Dynamically calculate the outlier threshold per-strike
-        steps =[]
-        for i in range(1, self.arrsize):
-            steps.append(self.impact_arr[i] - self.impact_arr[i - 1])
+        for i in range(new_arrsize):
+            # Removal based on chauvenet's criterion
+            if 1 / (2 * new_arrsize) > erfc(abs(self.impact_arr[i] - impact_mean) / impact_stdev):
+                new_mask[i] = False
+        self.fitToMask(new_mask)
 
-        steps_mean = stats.mean(steps)
-        steps_stdev = stats.stdev(steps)
+        # Final mask to clear out extra ending zeros
+        last_mask = [(self.time_arr[i] != 0) for i in range(1, len(self.time_arr))]
+        last_mask.insert(0, True)
+        self.fitToMask(last_mask)
 
-        for i in range(1, self.arrsize):
-            # Removal based on both the outlier-threshold value and chauvenet's criterion
-            if 1 / (2 * self.arrsize) > erfc(abs((self.impact_arr[i] - self.impact_arr[i - 1]) - steps_mean)) / steps_stdev or 1 / (2 * self.arrsize) > erfc(abs(self.impact_arr[i] - impact_mean) / impact_stdev):
-                mask[i] = False
-
+    def fitToMask(self, mask):
         prev_i = -1
         for i in range(len(mask)):
             if mask[i] is False:
@@ -127,7 +147,6 @@ class StrikeSet:
                     prev_i = i
             elif prev_i != -1:
                 for j in range(prev_i, i):
-                    print(j)
                     mask[j] = False
                 prev_i = -1
 
@@ -143,8 +162,8 @@ class TestSet:
     """
 
     def __init__(self, name, dim):
-
         self.name = name
+
 
         self.size = dim
 
@@ -339,6 +358,7 @@ class DataSet:
         # Self.data_record is keyed by group names
         # self.data_record[grotestsup] is keyed by tests
         # self.data_record[group][test] is keyed by one of (area, force_max, init_slope, wavelength)
+
 
         # Data Means
         self.area_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
