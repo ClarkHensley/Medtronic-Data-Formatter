@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import sys
 
 from copy import deepcopy
 from scipy.special import erfc
@@ -9,35 +8,39 @@ from scipy.special import erfc
 import numpy as np
 import statistics as stats
 import matplotlib.pyplot as plt
-
-
-
+import pandas as pd
+import seaborn as sns
 
 """
 Classes for formatting Medtronic Data
 """
-
 
 class StrikeSet:
     """
     This class just holds data for each CSV in one place
     """
 
-    def __init__(self, data, fitting_arr, group, time_storage, strike, settings):
+    def __init__(self, data, group, strike, settings, time_storage):
 
         self.group = group
         self.name = strike
 
-        try:
-            self.time_multiple = settings["TIME-DICT"][time_storage]
+        if type(time_storage) == str:
+            try:
+                self.time_multiple = settings["TIME-DICT"][time_storage]
 
-        except KeyError:
-            sys.exit(f"ERROR! Unknown Time Units found: {time_storage}\nPlease add this with the correct value to the TIME-DICT setting in the settings.txt file.")
+            except KeyError:
+                print(f"ERROR! Unknown Time Units found: {time_storage}\nPlease add this with the correct value to the TIME-DICT setting in the settings.txt file.")
+                raise SystemExit
+        else:
+            self.time_multiple = time_storage
 
-        self.fitting_arr = fitting_arr
+        # TODO: ?????????????????????????????????????????///
+        #self.fitting_arr = fitting_arr
 
         self.data = data
         self.accelerometer_present = len(data[0]) == 3
+
         self.timedelta = (float(data[1, 0]) - float(data[0, 0])) * self.time_multiple
 
         self.inc = settings["timestep"] / (2 * self.timedelta)
@@ -49,8 +52,6 @@ class StrikeSet:
         self.time_arr = np.zeros(shape=(self.arrsize))
         self.impact_arr = np.zeros(shape=(self.arrsize))
         self.accel_arr = np.zeros(shape=(self.arrsize))
-
-        self.rejection_arr = np.array([False for _ in range(self.arrsize)])
 
         self.strike_triggered = False
 
@@ -99,11 +100,7 @@ class StrikeSet:
             if self.impact_arr[self.arrsize - 3] < check_val:
                 self.impact_arr[self.arrsize - 3] = check_val
 
-    def smootheCurve(self, settings):
-
-        # Let's set these per-test
-        threshold = 2
-        iterations = 10
+    def smootheCurve(self, settings, threshold, iterations):
 
         for _ in range(iterations):
             old_size = len(self.impact_arr)
@@ -119,7 +116,6 @@ class StrikeSet:
 
             self.fitToMask(mask)
             new_arrsize = len(self.impact_arr)
-            print(new_arrsize)
             if new_arrsize == old_size:
                 break
 
@@ -151,10 +147,67 @@ class StrikeSet:
                 prev_i = -1
 
         self.impact_arr = self.impact_arr[mask]
-        self.time_arr = self.time_arr[mask]
+        #self.time_arr = self.time_arr[mask]
+        self.time_arr = self.time_arr[0:len(self.impact_arr)]
 
         if self.accelerometer_present:
             self.accel_arr = self.accel_arr[mask]
+
+    def plotAllData(self, settings):
+
+        # Plot Force v. Time
+        time_v_force_data = {
+                "title": f"Force v. Time for {self.name}",
+                "xlabel": "Time (us)",
+                "ylabel": "Force (kN)",
+                "xdata": self.time_arr,
+                "ydata": self.impact_arr,
+                "label": "Strike",
+                "legend": settings["LEGEND"]
+                }
+
+        if self.accelerometer_present:
+            # Plot Accel v. Time
+            time_v_accel_data = {
+                "title": f"Accel v. Time for {self.name}",
+                "xlabel": "Time (us)",
+                "ylabel": "Acceleration (m/s^2)",
+                "xdata": self.time_arr,
+                "ydata": self.impact_arr,
+                "label": "Strike",
+                "legend": settings["LEGEND"]
+                }
+
+        self.plotData(time_v_force_data, settings)
+        if self.accelerometer_present:
+            self.plotData(time_v_accel_data, settings)
+
+    def plotData(self, data, settings):
+
+        plt.figure(data["title"], figsize=settings["fig_size"])
+        plt.grid(True)
+        plt.title(data["title"])
+        plt.xlabel(data["xlabel"])
+        plt.ylabel(data["ylabel"])
+
+        plt.rc("axes", titlesize=settings["TITLE-SIZE"])
+        plt.rc("axes", labelsize=settings["LABEL-SIZE"])
+
+        if type(data["xdata"][0]) != np.ndarray and type(data["ydata"][0]) != np.ndarray:
+            plt.plot(data["xdata"], data["ydata"], marker=".", label=data["label"] + " 1")
+
+        else:
+            for i, _ in enumerate(data["xdata"]):
+                plt.plot(data["xdata"][i], data["ydata"][i], marker=".", label=data["label"] + f" {i + 1}")
+
+        if data["legend"]:
+            plt.legend(loc="upper left")
+
+        plt.tight_layout()
+        plt.savefig(data["title"] + ".png")
+        if settings["SHOW-EACH-STRIKE"]:
+            plt.show()
+        plt.close("all")
 
 class TestSet:
     """
@@ -163,7 +216,6 @@ class TestSet:
 
     def __init__(self, name, dim):
         self.name = name
-
 
         self.size = dim
 
@@ -284,15 +336,16 @@ class TestSet:
                 }
 
         # Plot Accel v. Time
-        time_v_accel_data = {
-            "title": f"Accel v. Time for {self.name}",
-            "xlabel": "Time (us)",
-            "ylabel": "Acceleration (m/s^2)",
-            "xdata": [],
-            "ydata": [],
-            "label": "Strike",
-            "legend": settings["LEGEND"]
-            }
+        if self.strike_set.accelerometer_present:
+            time_v_accel_data = {
+                "title": f"Accel v. Time for {self.name}",
+                "xlabel": "Time (us)",
+                "ylabel": "Acceleration (m/s^2)",
+                "xdata": [],
+                "ydata": [],
+                "label": "Strike",
+                "legend": settings["LEGEND"]
+                }
 
         # Plot Force v. Strike
         strike_v_max_force_data = {
@@ -313,12 +366,12 @@ class TestSet:
             if strike.accelerometer_present:
                 time_v_accel_data["xdata"].append(strike.time_arr)
                 time_v_accel_data["ydata"].append(strike.accel_arr)
-    
+
         self.plotData(time_v_force_data, settings)
 
         self.plotData(strike_v_max_force_data, settings)
 
-        if strike.accelerometer_present:
+        if self.strike_set.accelerometer_present:
             self.plotData(time_v_accel_data, settings)
 
     def plotData(self, data, settings):
@@ -344,9 +397,9 @@ class TestSet:
 
         plt.tight_layout()
         plt.savefig(data["title"] + ".png")
-        plt.show()
+        if settings["SHOW-EACH-TEST"]:
+            plt.show()
         plt.close("all")
-
 
 class DataSet:
 
@@ -385,4 +438,98 @@ class DataSet:
 
         self.wavelength_mean_arr[i] = stats.mean(test.wavelength_arr)
         self.wavelength_stdev_arr[i] = stats.stdev(test.wavelength_arr)
+
+    def plotAllRawData(self, group, settings):
+
+        test_list = [" ".join(name.split(" ")[1:]) for name in self.data_record[group]]
+
+        xlabel = "Test"
+
+        values = [
+                ("area", f"Area Under the Impulse Curve for {group}", "Area (kN * us)"),
+                ("force_max", f"Peak Force for {group}", "Force (kN)"),
+                ("init_slope", f"Initial Slope of the Wave for {group}", "Slope (kN / us)"),
+                ("wavelength", f"Duration of the Impact Event for {group}", "Duration (us)")
+                ]
+
+        for value in values:
+            (key, title, ylabel) = value
+
+            max_len = 0
+            for data in self.data_record[group].values():
+                max_len = max(max_len, len(data[key]))
+
+            for i, datum in enumerate(self.data_record[group].values()):
+                data_dict = {}
+                temp = np.empty((max_len))
+                for j, d in enumerate(datum[key]):
+                    temp[j] = d
+                data_dict[test_list[i]] = temp
+
+                print(data_dict)
+                data = pd.DataFrame(data=data_dict)
+
+                self.plotData(title, xlabel, ylabel, data, settings, True)
+
+    def plotAllMeanData(self, settings):
+        group_list = list(self.data_record.keys())
+
+        xlabel = "Group"
+
+        mean_values = [
+            ("area", "Mean Area Under the Impulse Curve", "Area (kN * us)"),
+            ("force_max", "Mean Peak Force", "Force (kN)"),
+            ("init_slope", "Mean Initial Slope of the Wave", "Slope (kN / us)"),
+            ("wavelength", "Mean Duration of the Impact Event", "Duration (us)")
+            ]
+
+        for value in mean_values:
+            (key, title, ylabel) = value
+
+            if key == "area":
+                init_data = deepcopy(self.area_mean_arr)
+            elif key == "force_max":
+                init_data = deepcopy(self.force_max_mean_arr)
+            elif key == "init_slope":
+                init_data = deepcopy(self.init_slope_mean_arr)
+            elif key == "wavelength":
+                init_data = deepcopy(self.wavelength_mean_arr)
+
+            max_len = 0
+            for datum in init_data:
+                max_len = max(max_len, len(datum))
+
+            data_dict = {}
+
+            for i, datum in enumerate(init_data):
+                temp = [0 for _ in range(max_len)]
+                for j, d in enumerate(datum):
+                    temp[j] = d
+                data_dict[group_list[i]] = temp
+
+            data = pd.DataFrame(data=data_dict)
+
+            self.plotData(title, xlabel, ylabel, data, settings)
+
+    def plotData(self, title, xlabel, ylabel, selected_data, settings, iterated=False):
+
+        plt.figure(title, figsize=settings["fig_size"])
+        plt.grid(True)
+        plt.title(title)
+
+        plt.rc("axes", titlesize=settings["TITLE-SIZE"])
+        plt.rc("axes", labelsize=settings["LABEL-SIZE"])
+        plt.ylabel(ylabel)
+        plt.xlabel(xlabel)
+
+        sns.violinplot(data=selected_data)
+
+        plt.tight_layout()
+        if iterated:
+            plt.savefig(title + "-" + xlabel + ".png")
+        else:
+            plt.savefig(title + ".png")
+        if settings["SHOW-EACH-FINAL-IMAGE"]:
+            plt.show()
+        plt.close("all")
 

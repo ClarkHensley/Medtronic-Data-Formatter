@@ -44,6 +44,15 @@ LEGEND: False
 # Boolean to show "average string counts", default False
 SHOW-STRING-COUNT: False
 
+# Boolean to pop up each image plotted per Strike, default True
+SHOW-EACH-STRIKE: False
+
+# Boolean to pop up each image plotted per Test, default True
+SHOW-EACH-TEST: True
+
+# Boolean to pop up each image plotted per Dataset, default True
+SHOW-EACH-FINAL-IMAGE: True
+
 # Set of Time Units mapped to the proper conversion factor to Microseconds (us)
 TIME-DICT: {
   (s), 1000000

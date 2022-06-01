@@ -5,6 +5,7 @@
 # No need to include all the CSVs or Results on GitHub
 src/Tests/*
 src/Results/*
+src/RawData/*
 
 # Include the .gitignore
 !.gitignore

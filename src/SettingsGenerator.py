@@ -208,6 +208,35 @@ def generateSettings(directory):
 
     return settings_dict
 
+def generateRelativeConstants(source_directory, dataset):
+
+    # "\" for Windows
+    if os.name == "nt":
+        DELIMITER = "\\"
+    # "/" for Mac/Linux
+    else:
+        DELIMITER = "/"
+
+    main_results_directory = os.path.join(source_directory, "Results")
+    if not os.path.exists(main_results_directory):
+        os.mkdir(main_results_directory)
+
+    results_directory = os.path.join(main_results_directory, f"{dataset}")
+    if not os.path.exists(results_directory):
+        os.mkdir(results_directory)
+
+    main_raw_data_directory = os.path.join(source_directory, "RawData")
+    if not os.path.exists(main_raw_data_directory):
+        os.mkdir(main_raw_data_directory)
+
+    raw_data_directory = os.path.join(main_raw_data_directory, f"{dataset}")
+    if not os.path.exists(raw_data_directory):
+        os.mkdir(raw_data_directory)
+
+    tests_directory = os.path.join(source_directory, "Tests")
+
+    return DELIMITER, raw_data_directory, results_directory, tests_directory
+
 if __name__ == "__main__":
     print("SettingsGenerator.py is not meant to be run on its own.")
 
