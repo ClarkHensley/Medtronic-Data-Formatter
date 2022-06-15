@@ -29,8 +29,12 @@ TIME-SHIFT: 75
 # Lower Level Limit for Force, if the data are noisy, default 0.1
 FORCE-LOWER-BOUND: 0.1
 
-# Reasonable Expected Force Values, default 3
+# Reasonable Expected Force Values, default 3, 20
 FORCE-LOWER-REASONABLE: 3
+FORCE-UPPER-REASONABLE: 20
+
+# Reasonable Expected Lower Area Value, default 250
+AREA-LOWER-REASONABLE: 250
 
 # Reasonably Expected Slope, default 0
 SLOPE-LOWER-LIMIT: 0
@@ -48,7 +52,7 @@ SHOW-STRING-COUNT: False
 SHOW-EACH-STRIKE: False
 
 # Boolean to pop up each image plotted per Test, default True
-SHOW-EACH-TEST: True
+SHOW-EACH-TEST: False
 
 # Boolean to pop up each image plotted per Dataset, default True
 SHOW-EACH-FINAL-IMAGE: True

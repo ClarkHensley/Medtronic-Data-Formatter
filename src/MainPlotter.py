@@ -10,8 +10,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import csv as csv_lib
+import statistics as stats
 
 from copy import deepcopy
+from scipy.special import erfc
 
 from SettingsGenerator import generateSettings, generateDatasetsAndGroups, generateRelativeConstants
 from DataExtractor import extractFromAll
@@ -77,7 +79,9 @@ def main():
         if not os.path.exists(group_dir):
             os.mkdir(group_dir)
         this_dataset.data_record[group] = {}
+        this_dataset.addRow(g)
         for t, test in enumerate(groups_dict[group]["tests"]):
+            this_dataset.addCol((g, t))
             raw_test_dir = os.path.join(raw_group_dir, test)
             test_dir = os.path.join(group_dir, test)
             if not os.path.exists(test_dir):
@@ -87,11 +91,15 @@ def main():
             strikes_list.sort()
 
             this_test = TestSet(test, len(strikes_list))
-            for s, csv in enumerate(strikes_list):
+            accepted_strikes = {}
+            for csv in strikes_list:
                 short_csv = csv.split(".csv")[0]
                 short_csv = short_csv.split("RAW-")[1]
                 with open(os.path.join(raw_test_dir, f"{short_csv}-TIME-MULTIPLE.txt"), "r") as tmtxt:
                     time_multiple = int(tmtxt.read())
+
+                with open(os.path.join(raw_test_dir, f"{short_csv}-INDEX.txt"), "r") as indtxt:
+                    s = int(indtxt.read()) - 1
 
                 data = pd.read_csv(os.path.join(raw_test_dir, csv), dtype=float).to_numpy(dtype=float)
                 this_strike = StrikeSet(data, group, short_csv, settings, time_multiple)
@@ -105,36 +113,68 @@ def main():
                         this_test.strike_set.accel_arr[i] = float(data[i, 2]) / settings["mV_to_a"]
 
                 this_test.characterizeWaveform(settings, s)
-                this_test.strike_set.smootheCurve(settings, groups_dict[group]["threshold"], groups_dict[group]["iterations"])
-                this_test.updateData()
-                this_test.initialAppend()
+                # If there are major outliers, use iterative smoothing once to try to fixthose.
+                #this_test.strike_set.plotAllData(settings)
+                if this_test.force_max_arr[s] >= settings["FORCE-UPPER-REASONABLE"]:
+                    this_test.strike_set.smoothIteratively(groups_dict[group]["threshold"], groups_dict[group]["iterations"])
+                    this_test.characterizeWaveform(settings, s)
+                this_test.strike_set.smoothCurve(settings)
+                this_test.characterizeWaveform(settings, s)
 
-                # Plot per-strike
-                this_test.strike_set.plotAllData(settings)
+                # Check if the strike is rejected, otherwise display it
+                if not (settings["FORCE-LOWER-REASONABLE"] <= this_test.force_max_arr[s] <= settings["FORCE-UPPER-REASONABLE"]) or not (this_test.area_arr[s] >= settings["AREA-LOWER-REASONABLE"]):
+                    this_test.rejected_strikes.append(s)
+                    print(f"REJECTED STRIKE {short_csv}: OUT OF BOUNDS")
+
+                else:
+                    this_test.updateData()
+                    this_test.initialAppend()
+                        # Plot per-strike
+                    this_test.strike_set.plotAllData(settings)
+
+            # Reject by Chauvenet's Criterion:
+            # Do it for both Area and Max Force
+            this_dataset.calculateStats(this_test, (g, t))
 
             # Plot per-test
-            this_dataset.calculateStats(this_test, (g, t))
             this_dataset.data_record[group][test] = {
                 "area": deepcopy(this_test.area_arr),
                 "force_max": deepcopy(this_test.force_max_arr),
                 "init_slope": deepcopy(this_test.init_slope_arr),
-                "wavelength": deepcopy(this_test.wavelength_arr)
+                "wavelength": deepcopy(this_test.wavelength_arr),
+                "rejected_strikes": deepcopy(this_test.rejected_strikes)
             }
 
             this_test.plotAllData(settings)
 
+        #Now manage the test now that it's filled
+        for t, test in enumerate(list(this_dataset.data_record[group].keys())):
+            selected_area = this_dataset.data_record[group][test]["area"]
+            selected_force_max = this_dataset.data_record[group][test]["force_max"]
+            for key in list(selected_area.keys()):
+                if key not in this_dataset.data_record[group][test]["rejected_strikes"]:
+                    if ((1 / 2 * len(selected_area)) < erfc(np.abs(selected_area[key] - this_dataset.area_mean_arr[g][t]) / this_dataset.area_stdev_arr[g][t])) or ((1 / 2 * len(selected_force_max)) < erfc(np.abs(selected_force_max[key] - this_dataset.force_max_mean_arr[g][t]) / this_dataset.force_max_stdev_arr[g][t])):
+                        this_dataset.data_record[group][test]["rejected_strikes"].append(key)
+                        if key < 9:
+                            print(f"REJECTED STRIKE {test}_0{key + 1}: CHAUVENET'S CRITERION")
+                        else:
+                            print(f"REJECTED STRIKE {test}_{key + 1}: CHAUVENET'S CRITERION")
+                        this_dataset.delRow((g, t))
+
         # Plot per-group
+        os.chdir(group_dir)
         this_dataset.plotAllRawData(group, settings)
 
 
     # Record per-Dataset
+    os.chdir(results_directory)
+    #listthis_dataset.finalCalculation()
     this_dataset.plotAllMeanData(settings)
     final_means_and_stdevs = []
     final_means_and_stdevs.append(("Implant", "Area Mean", "Force Mean", "Slope Mean", "Length Mean", "Area STDdev", "Force STDdev", "Slope STDdev", "Length STDdev"))
     for g, group in enumerate(groups_list):
         for t, test in enumerate(this_dataset.data_record[group]):
-            final_means_and_stdevs.append((test, this_dataset.area_mean_arr[(g, t)], this_dataset.force_max_mean_arr[(g, t)], this_dataset.init_slope_mean_arr[(g, t)], this_dataset.wavelength_mean_arr[(g, t)], this_dataset.area_stdev_arr[(g, t)], this_dataset.force_max_stdev_arr[(g, t)], this_dataset.init_slope_stdev_arr[(g, t)], this_dataset.wavelength_stdev_arr[(g, t)]))
-    os.chdir(results_directory)
+            final_means_and_stdevs.append((test, this_dataset.area_mean_arr[g][t], this_dataset.force_max_mean_arr[g][t], this_dataset.init_slope_mean_arr[g][t], this_dataset.wavelength_mean_arr[g][t], this_dataset.area_stdev_arr[g][t], this_dataset.force_max_stdev_arr[g][t], this_dataset.init_slope_stdev_arr[g][t], this_dataset.wavelength_stdev_arr[g][t]))
     with open(f"Final-Data-For-{dataset}.csv", "w", newline="") as newcsv:
         writer = csv_lib.writer(newcsv)
         writer.writerows(final_means_and_stdevs)

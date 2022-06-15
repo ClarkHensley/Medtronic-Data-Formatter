@@ -136,6 +136,9 @@ def extractFromStrike(this_test, s, csv, csv_path, group, settings):
             with open(f"{short_csv}-TIME-MULTIPLE.txt", "w") as tmtxt:
                 tmtxt.write(str(this_test.strike_set.time_multiple))
 
+            with open(f"{short_csv}-INDEX.txt", "w") as indtxt:
+                indtxt.write(str(s + 1))
+
             return this_test
 
 

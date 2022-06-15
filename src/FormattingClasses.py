@@ -35,9 +35,6 @@ class StrikeSet:
         else:
             self.time_multiple = time_storage
 
-        # TODO: ?????????????????????????????????????????///
-        #self.fitting_arr = fitting_arr
-
         self.data = data
         self.accelerometer_present = len(data[0]) == 3
 
@@ -100,7 +97,27 @@ class StrikeSet:
             if self.impact_arr[self.arrsize - 3] < check_val:
                 self.impact_arr[self.arrsize - 3] = check_val
 
-    def smootheCurve(self, settings, threshold, iterations):
+    def smoothCurve(self, settings):
+
+        slopes = np.zeros(shape=(self.arrsize - 1))
+        for i in range(0, self.arrsize - 1):
+            slopes[i] = (self.impact_arr[i] - self.impact_arr[i - 1]) / self.timedelta
+
+        slopes_mean = stats.mean(slopes)
+        slopes_stdev = stats.stdev(slopes)
+        mask = [True for _ in range(len(self.impact_arr))]
+
+        for i in range(len(slopes)):
+            if 1 / (2 * len(slopes)) > erfc(abs(slopes[i] - slopes_mean) / slopes_stdev):
+                mask[i + 1] = False
+        self.fitToMask(mask)
+
+        # Final mask to clear out extra ending zeros
+        last_mask = [(self.time_arr[i] != 0) for i in range(1, len(self.time_arr))]
+        last_mask.insert(0, True)
+        self.fitToMask(last_mask)
+
+    def smoothIteratively(self, threshold, iterations):
 
         for _ in range(iterations):
             old_size = len(self.impact_arr)
@@ -119,22 +136,6 @@ class StrikeSet:
             if new_arrsize == old_size:
                 break
 
-        new_mask = [True for _ in range(new_arrsize)]
-        # Calculate the Mean and STDev of the impact
-        impact_mean = stats.mean(self.impact_arr)
-        impact_stdev = stats.stdev(self.impact_arr)
-
-        for i in range(new_arrsize):
-            # Removal based on chauvenet's criterion
-            if 1 / (2 * new_arrsize) > erfc(abs(self.impact_arr[i] - impact_mean) / impact_stdev):
-                new_mask[i] = False
-        self.fitToMask(new_mask)
-
-        # Final mask to clear out extra ending zeros
-        last_mask = [(self.time_arr[i] != 0) for i in range(1, len(self.time_arr))]
-        last_mask.insert(0, True)
-        self.fitToMask(last_mask)
-
     def fitToMask(self, mask):
         prev_i = -1
         for i in range(len(mask)):
@@ -147,11 +148,11 @@ class StrikeSet:
                 prev_i = -1
 
         self.impact_arr = self.impact_arr[mask]
-        #self.time_arr = self.time_arr[mask]
-        self.time_arr = self.time_arr[0:len(self.impact_arr)]
+        self.time_arr = self.time_arr[mask]
 
         if self.accelerometer_present:
             self.accel_arr = self.accel_arr[mask]
+        self.arrsize = len(self.impact_arr)
 
     def plotAllData(self, settings):
 
@@ -173,7 +174,7 @@ class StrikeSet:
                 "xlabel": "Time (us)",
                 "ylabel": "Acceleration (m/s^2)",
                 "xdata": self.time_arr,
-                "ydata": self.impact_arr,
+                "ydata": self.accel_arr,
                 "label": "Strike",
                 "legend": settings["LEGEND"]
                 }
@@ -231,16 +232,18 @@ class TestSet:
 
         self.strike_set = None
 
+        self.inds = []
+
         # Total Data Values
         self.total_time_arr = None
         self.total_impact_arr = None
         self.total_accel_arr = None
 
         # Calculated Values
-        self.area_arr = np.zeros(shape=(dim))
-        self.force_max_arr = np.zeros(shape=(dim))
-        self.init_slope_arr = np.zeros(shape=(dim))
-        self.wavelength_arr = np.zeros(shape=(dim))
+        self.area_arr = {}
+        self.force_max_arr = {}
+        self.init_slope_arr = {}
+        self.wavelength_arr = {}
 
     def __getitem__(self, key):
         return self.strike_set[key]
@@ -255,6 +258,8 @@ class TestSet:
             self.strike_set = None
 
         self.current_ind = ind
+
+        self.inds.append(ind)
 
         self.strike_set = strike_set
 
@@ -282,20 +287,16 @@ class TestSet:
     def initialAppend(self):
         self.strike_sets[self.current_ind] = deepcopy(self.strike_set)
 
-    def finalize(self, settings):
-
-        if len(self.rejected_strikes) != 0:
-
-            self.area_arr = np.delete(self.area_arr, self.rejected_strikes)
-            self.force_max_arr = np.delete(self.force_max_arr, self.rejected_strikes)
-            self.init_slope_arr = np.delete(self.init_slope_arr, self.rejected_strikes)
-            self.wavelength_arr = np.delete(self.wavelength_arr, self.rejected_strikes)
-
     def getCurrentSlope(self, ind):
 
         return (float(self.strike_set.data[ind, 1]) - float(self.strike_set.data[ind - 1, 1])) / (float(self.strike_set.data[ind, 0]) - float(self.strike_set.data[ind - 1, 0]))
 
     def characterizeWaveform(self, settings, s):
+
+        self.area_arr[s] = 0
+        self.force_max_arr[s] = 0
+        self.init_slope_arr[s] = 0
+        self.wavelength_arr[s] = 0
 
         init_slope_points_cap = int(500 * self.strike_set.ratio)
         wave_duration = False
@@ -347,13 +348,17 @@ class TestSet:
                 "legend": settings["LEGEND"]
                 }
 
+        force_data = self.force_max_arr
+        for val in self.rejected_strikes:
+            force_data.pop(val)
+
         # Plot Force v. Strike
         strike_v_max_force_data = {
                 "title": f"Max Force v. Strike Number for {self.name}",
                 "xlabel": "Strike Number",
                 "ylabel": "Force (kN)",
-                "xdata": list(self.strike_sets.keys()),
-                "ydata": self.force_max_arr,
+                "xdata": list(force_data.keys()),
+                "ydata": list(force_data.values()),
                 "label": "",
                 "legend": False
                 }
@@ -407,41 +412,79 @@ class DataSet:
 
         # 3-dimensional Dictionary to store the actual data
         self.data_record = {}
-
-        # Self.data_record is keyed by group names
-        # self.data_record[grotestsup] is keyed by tests
+        # self.data_record is keyed by group names
+        # self.data_record[group] is keyed by tests
         # self.data_record[group][test] is keyed by one of (area, force_max, init_slope, wavelength)
 
+        ## Data Means
+        #self.area_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        #self.force_max_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        #self.init_slope_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        #self.wavelength_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+
+        ## Data STDevs
+        #self.area_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        #self.force_max_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        #self.init_slope_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        #self.wavelength_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
 
         # Data Means
-        self.area_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-        self.force_max_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-        self.init_slope_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-        self.wavelength_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.area_mean_arr = {}
+        self.force_max_mean_arr = {}
+        self.init_slope_mean_arr = {}
+        self.wavelength_mean_arr = {}
 
         # Data STDevs
-        self.area_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-        self.force_max_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-        self.init_slope_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-        self.wavelength_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.area_stdev_arr = {}
+        self.force_max_stdev_arr = {}
+        self.init_slope_stdev_arr = {}
+        self.wavelength_stdev_arr = {}
+
+    def addRow(self, ind):
+        self.area_mean_arr[ind] = {}
+        self.area_stdev_arr[ind] = {}
+        self.force_max_mean_arr[ind] = {}
+        self.force_max_stdev_arr[ind] = {}
+        self.init_slope_mean_arr[ind] = {}
+        self.init_slope_stdev_arr[ind] = {}
+        self.wavelength_mean_arr[ind] = {}
+        self.wavelength_stdev_arr[ind] = {}
+
+    def addCol(self, ind):
+        self.area_mean_arr[ind[0]][ind[1]] = None
+        self.area_stdev_arr[ind[0]][ind[1]] = None
+        self.force_max_mean_arr[ind[0]][ind[1]] = None
+        self.force_max_stdev_arr[ind[0]][ind[1]] = None
+        self.init_slope_mean_arr[ind[0]][ind[1]] = None
+        self.init_slope_stdev_arr[ind[0]][ind[1]] = None
+        self.wavelength_mean_arr[ind[0]][ind[1]] = None
+        self.wavelength_stdev_arr[ind[0]][ind[1]] = None
+
+    def delRow(self, ind):
+        del self.area_mean_arr[ind[0]][ind[1]]
+        del self.area_stdev_arr[ind[0]][ind[1]]
+        del self.force_max_mean_arr[ind[0]][ind[1]]
+        del self.force_max_stdev_arr[ind[0]][ind[1]]
+        del self.init_slope_mean_arr[ind[0]][ind[1]]
+        del self.init_slope_stdev_arr[ind[0]][ind[1]]
+        del self.wavelength_mean_arr[ind[0]][ind[1]]
+        del self.wavelength_stdev_arr[ind[0]][ind[1]]
 
     def calculateStats(self, test, i):
 
-        self.area_mean_arr[i] = stats.mean(test.area_arr)
-        self.area_stdev_arr[i] = stats.stdev(test.area_arr)
+        self.area_mean_arr[i[0]][i[1]] = stats.mean(test.area_arr.values())
+        self.area_stdev_arr[i[0]][i[1]] = stats.stdev(test.area_arr.values())
 
-        self.force_max_mean_arr[i] = stats.mean(test.force_max_arr)
-        self.force_max_stdev_arr[i] = stats.stdev(test.force_max_arr)
+        self.force_max_mean_arr[i[0]][i[1]] = stats.mean(test.force_max_arr.values())
+        self.force_max_stdev_arr[i[0]][i[1]] = stats.stdev(test.force_max_arr.values())
 
-        self.init_slope_mean_arr[i] = stats.mean(test.init_slope_arr)
-        self.init_slope_stdev_arr[i] = stats.stdev(test.init_slope_arr)
+        self.init_slope_mean_arr[i[0]][i[1]] = stats.mean(test.init_slope_arr.values())
+        self.init_slope_stdev_arr[i[0]][i[1]] = stats.stdev(test.init_slope_arr.values())
 
-        self.wavelength_mean_arr[i] = stats.mean(test.wavelength_arr)
-        self.wavelength_stdev_arr[i] = stats.stdev(test.wavelength_arr)
+        self.wavelength_mean_arr[i[0]][i[1]] = stats.mean(test.wavelength_arr.values())
+        self.wavelength_stdev_arr[i[0]][i[1]] = stats.stdev(test.wavelength_arr.values())
 
     def plotAllRawData(self, group, settings):
-
-        test_list = [" ".join(name.split(" ")[1:]) for name in self.data_record[group]]
 
         xlabel = "Test"
 
@@ -455,21 +498,15 @@ class DataSet:
         for value in values:
             (key, title, ylabel) = value
 
-            max_len = 0
-            for data in self.data_record[group].values():
-                max_len = max(max_len, len(data[key]))
+            data_dict = {}
+            for i, (test, dic) in enumerate(list(self.data_record[group].items())):
+                temp_data = dic[key]
+                for value in dic["rejected_strikes"]:
+                    temp_data.pop(value)
+                data_dict[i + 1] = temp_data
 
-            for i, datum in enumerate(self.data_record[group].values()):
-                data_dict = {}
-                temp = np.empty((max_len))
-                for j, d in enumerate(datum[key]):
-                    temp[j] = d
-                data_dict[test_list[i]] = temp
-
-                print(data_dict)
-                data = pd.DataFrame(data=data_dict)
-
-                self.plotData(title, xlabel, ylabel, data, settings, True)
+            data = pd.DataFrame(data=data_dict)
+            self.plotData(title, xlabel, ylabel, data, settings, True)
 
     def plotAllMeanData(self, settings):
         group_list = list(self.data_record.keys())
@@ -495,23 +532,26 @@ class DataSet:
             elif key == "wavelength":
                 init_data = deepcopy(self.wavelength_mean_arr)
 
+            #print(init_data)
+
             max_len = 0
-            for datum in init_data:
+            for datum in init_data.values():
                 max_len = max(max_len, len(datum))
 
             data_dict = {}
 
-            for i, datum in enumerate(init_data):
+            for i, datum in enumerate(list(init_data.values())):
                 temp = [0 for _ in range(max_len)]
-                for j, d in enumerate(datum):
+                for j, d in enumerate(list(datum.values())):
                     temp[j] = d
                 data_dict[group_list[i]] = temp
 
+            #print(data_dict)
             data = pd.DataFrame(data=data_dict)
 
             self.plotData(title, xlabel, ylabel, data, settings)
 
-    def plotData(self, title, xlabel, ylabel, selected_data, settings, iterated=False):
+    def plotData(self, title, xlabel, ylabel, input_data, settings, iterated=False):
 
         plt.figure(title, figsize=settings["fig_size"])
         plt.grid(True)
@@ -522,13 +562,13 @@ class DataSet:
         plt.ylabel(ylabel)
         plt.xlabel(xlabel)
 
-        sns.violinplot(data=selected_data)
+        sns.violinplot(data=input_data, inner="point")
 
         plt.tight_layout()
         if iterated:
-            plt.savefig(title + "-" + xlabel + ".png")
+            plt.savefig(f"{title}-{xlabel}.png")
         else:
-            plt.savefig(title + ".png")
+            plt.savefig(f"{title}.png")
         if settings["SHOW-EACH-FINAL-IMAGE"]:
             plt.show()
         plt.close("all")
