@@ -13,8 +13,4 @@ src/RawData/*
 .*
 
 # No python venv files
-__pycache__/
-bin/
-lib/
-lib64
-share/
+Medtronic-Venv/*
