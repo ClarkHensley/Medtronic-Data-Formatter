@@ -51,10 +51,10 @@ def main():
                     needToGenerate = True
                     break
 
-            if needToGenerate:
-                print(f"INFO: Some or All Data for Dataset {dataset} have not been extracted. Beginning extraction process")
-                extractFromAll(settings, datasets_dict, groups_dict)
-                break
+        if needToGenerate:
+            print(f"INFO: Some or All Data for Dataset {dataset} have not been extracted. Beginning extraction process")
+            extractFromAll(settings, datasets_dict, groups_dict)
+            break
 
     full_groups = {}
 
@@ -155,6 +155,9 @@ def main():
                             print(f"REJECTED STRIKE {test}_0{key + 1}: CHAUVENET'S CRITERION")
                         else:
                             print(f"REJECTED STRIKE {test}_{key + 1}: CHAUVENET'S CRITERION")
+                        this_dataset.delRow((g, t))
+
+                    if this_dataset.area_mean_arr[g, t] == this_dataset.force_max_mean_arr[g, t] == this_dataset.init_slope_mean_arr[g, t] == this_dataset.wavelength_mean_arr[g, t] == 0:
                         this_dataset.delRow((g, t))
 
         # Plot per-group

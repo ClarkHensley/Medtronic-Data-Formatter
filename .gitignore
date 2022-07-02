@@ -6,6 +6,8 @@
 src/Tests/*
 src/Results/*
 src/RawData/*
+src/Medtronic-Data-20210806
+src/Groupsselected
 
 # Include the .gitignore
 !.gitignore
@@ -14,3 +16,7 @@ src/RawData/*
 
 # No python venv files
 Medtronic-Venv/*
+Medtronic-Venv
+
+# No pycache
+src/__pycache__

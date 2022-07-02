@@ -538,14 +538,14 @@ class DataSet:
             #print(init_data)
 
             max_len = 0
-            for datum in init_data.values():
+            for datum in init_data:
                 max_len = max(max_len, len(datum))
 
             data_dict = {}
 
-            for i, datum in enumerate(list(init_data.values())):
+            for i, datum in enumerate(init_data):
                 temp = [0 for _ in range(max_len)]
-                for j, d in enumerate(list(datum.values())):
+                for j, d in enumerate(datum):
                     temp[j] = d
                 data_dict[group_list[i]] = temp
 
