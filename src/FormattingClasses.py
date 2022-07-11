@@ -154,62 +154,6 @@ class StrikeSet:
             self.accel_arr = self.accel_arr[mask]
         self.arrsize = len(self.impact_arr)
 
-    def plotAllData(self, settings):
-
-        # Plot Force v. Time
-        time_v_force_data = {
-                "title": f"Force v. Time for {self.name}",
-                "xlabel": "Time (us)",
-                "ylabel": "Force (kN)",
-                "xdata": self.time_arr,
-                "ydata": self.impact_arr,
-                "label": "Strike",
-                "legend": settings["LEGEND"]
-                }
-
-        if self.accelerometer_present:
-            # Plot Accel v. Time
-            time_v_accel_data = {
-                "title": f"Accel v. Time for {self.name}",
-                "xlabel": "Time (us)",
-                "ylabel": "Acceleration (m/s^2)",
-                "xdata": self.time_arr,
-                "ydata": self.accel_arr,
-                "label": "Strike",
-                "legend": settings["LEGEND"]
-                }
-
-        self.plotData(time_v_force_data, settings)
-        if self.accelerometer_present:
-            self.plotData(time_v_accel_data, settings)
-
-    def plotData(self, data, settings):
-
-        plt.figure(data["title"], figsize=settings["fig_size"])
-        plt.grid(True)
-        plt.title(data["title"])
-        plt.xlabel(data["xlabel"])
-        plt.ylabel(data["ylabel"])
-
-        plt.rc("axes", titlesize=settings["TITLE-SIZE"])
-        plt.rc("axes", labelsize=settings["LABEL-SIZE"])
-
-        if type(data["xdata"][0]) != np.ndarray and type(data["ydata"][0]) != np.ndarray:
-            plt.plot(data["xdata"], data["ydata"], marker=".", label=data["label"] + " 1")
-
-        else:
-            for i, _ in enumerate(data["xdata"]):
-                plt.plot(data["xdata"][i], data["ydata"][i], marker=".", label=data["label"] + f" {i + 1}")
-
-        if data["legend"]:
-            plt.legend(loc="upper left")
-
-        plt.tight_layout()
-        plt.savefig(data["title"] + ".png")
-        if settings["SHOW-EACH-STRIKE"]:
-            plt.show()
-        plt.close("all")
-
 class TestSet:
     """
     This class holds the data for a test
@@ -525,14 +469,16 @@ class DataSet:
 
             if key == "area":
                 init_data = deepcopy(self.area_mean_arr)
+                min_max_vals = (settings["MEAN-AREA-MIN"], settings["MEAN-AREA-MAX"])
             elif key == "force_max":
                 init_data = deepcopy(self.force_max_mean_arr)
+                min_max_vals = (settings["MEAN-PEAK-FORCE-MIN"], settings["MEAN-PEAK-FORCE-MAX"])
             elif key == "init_slope":
                 init_data = deepcopy(self.init_slope_mean_arr)
+                min_max_vals = (settings["MEAN-INIT-SLOPE-MIN"], settings["MEAN-INIT-SLOPE-MAX"])
             elif key == "wavelength":
                 init_data = deepcopy(self.wavelength_mean_arr)
-
-            #print(init_data)
+                min_max_vals = (settings["MEAN-LENGTH-MIN"], settings["MEAN-LENGTH-MAX"])
 
             max_len = 0
             for datum in init_data.values():
@@ -546,12 +492,11 @@ class DataSet:
                     temp[j] = d
                 data_dict[group_list[i]] = temp
 
-            #print(data_dict)
             data = pd.DataFrame(data=data_dict)
 
-            self.plotData(title, xlabel, ylabel, data, settings)
+            self.plotData(title, xlabel, ylabel, data, settings, False, min_max_vals)
 
-    def plotData(self, title, xlabel, ylabel, input_data, settings, iterated=False):
+    def plotData(self, title, xlabel, ylabel, input_data, settings, iterated, resize_axis = None):
 
         plt.figure(title, figsize=settings["fig_size"])
         plt.grid(True)
@@ -562,7 +507,11 @@ class DataSet:
         plt.ylabel(ylabel)
         plt.xlabel(xlabel)
 
-        sns.violinplot(data=input_data, inner="point")
+        plot = sns.violinplot(data=input_data, inner="point")
+
+        if resize_axis is not None:
+            axes = plot.axes
+            axes.set_ylim(resize_axis[0], resize_axis[1])
 
         plt.tight_layout()
         if iterated:

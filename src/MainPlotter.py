@@ -114,7 +114,6 @@ def main():
 
                 this_test.characterizeWaveform(settings, s)
                 # If there are major outliers, use iterative smoothing once to try to fixthose.
-                #this_test.strike_set.plotAllData(settings)
                 if this_test.force_max_arr[s] >= settings["FORCE-UPPER-REASONABLE"]:
                     this_test.strike_set.smoothIteratively(groups_dict[group]["threshold"], groups_dict[group]["iterations"])
                     this_test.characterizeWaveform(settings, s)
@@ -129,8 +128,6 @@ def main():
                 else:
                     this_test.updateData()
                     this_test.initialAppend()
-                        # Plot per-strike
-                    this_test.strike_set.plotAllData(settings)
 
             # Reject by Chauvenet's Criterion:
             # Do it for both Area and Max Force
@@ -168,7 +165,6 @@ def main():
 
     # Record per-Dataset
     os.chdir(results_directory)
-    #listthis_dataset.finalCalculation()
     this_dataset.plotAllMeanData(settings)
     final_means_and_stdevs = []
     final_means_and_stdevs.append(("Implant", "Area Mean", "Force Mean", "Slope Mean", "Length Mean", "Area STDdev", "Force STDdev", "Slope STDdev", "Length STDdev"))

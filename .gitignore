@@ -2,10 +2,10 @@
 # Don't include the zipped version of the final implementation
 *.zip
 
-# No need to include all the CSVs or Results on GitHub
-src/Tests/*
-src/Results/*
-src/RawData/*
+# Include only .py and .txt files from src/
+!src/*.py
+!src/*.txt
+src/*
 
 # Include the .gitignore
 !.gitignore

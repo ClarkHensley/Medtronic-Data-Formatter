@@ -65,12 +65,12 @@ def extractFromAll(settings=None, datasets_dict=None, groups_dict=None):
 
     for g, group in enumerate(full_groups):
         # Set up each group, one test at a time
-        extractFromGroup(group, g, full_groups, source_directory, DELIMITER, raw_data_directory, settings)
+        extractFromGroup(group, g, full_groups, source_directory, tests_directory, DELIMITER, raw_data_directory, settings)
 
     print("DONE")
     return
 
-def extractFromGroup(group, g, full_groups, source_directory, DELIMITER, raw_data_directory, settings):
+def extractFromGroup(group, g, full_groups, source_directory, tests_directory, DELIMITER, raw_data_directory, settings):
     # Extrac data From each group, test by test, plot and store data afterwards
     print()
     print(f"\tBEGINNING GROUP {group}")
@@ -80,11 +80,11 @@ def extractFromGroup(group, g, full_groups, source_directory, DELIMITER, raw_dat
         os.mkdir(current_group_dir)
 
     for t, test in enumerate(full_groups[group]):
-        extractFromTest(source_directory, group, g, test, t, DELIMITER, current_group_dir, settings)
+        extractFromTest(source_directory, tests_directory, group, g, test, t, DELIMITER, current_group_dir, settings)
 
-def extractFromTest(source_directory, group, g, test, t, DELIMITER, current_group_dir, settings):
+def extractFromTest(source_directory, tests_directory, group, g, test, t, DELIMITER, current_group_dir, settings):
     # Extract data from each test, gather average data across all strikes per test
-    csv_path = os.path.join(source_directory, test)
+    csv_path = os.path.join(tests_directory, test)
 
     test = test.split(DELIMITER)[-1]
 

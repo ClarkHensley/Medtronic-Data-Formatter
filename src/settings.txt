@@ -14,7 +14,7 @@
 # Medtronic-Data-20210806
 # TroubleShooting
 
-DATASET: Medtronic-Data-20210806
+DATASET: Groupsselected
 
 # Font size of Graph Titles, default 30
 TITLE-SIZE: 30
@@ -56,6 +56,19 @@ SHOW-EACH-TEST: False
 
 # Boolean to pop up each image plotted per Dataset, default True
 SHOW-EACH-FINAL-IMAGE: True
+
+#Min/Max Violin Plot Values for Mean Violin Plots
+MEAN-AREA-MIN: 250
+MEAN-AREA-MAX: 1100
+
+MEAN-PEAK-FORCE-MIN: 0
+MEAN-PEAK-FORCE-MAX: 22
+
+MEAN-INIT-SLOPE-MIN: -1
+MEAN-INIT-SLOPE-MAX: 1
+
+MEAN-LENGTH-MIN: 0
+MEAN-LENGTH-MAX: 200
 
 # Set of Time Units mapped to the proper conversion factor to Microseconds (us)
 TIME-DICT: {
