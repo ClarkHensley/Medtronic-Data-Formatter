@@ -233,7 +233,6 @@ def generateRelativeConstants(source_directory, dataset):
     if not os.path.exists(raw_data_directory):
         os.mkdir(raw_data_directory)
 
-    #tests_directory = os.path.join(source_directory, "Tests")
     tests_directory = os.path.join(source_directory, f"{dataset}")
 
     return DELIMITER, raw_data_directory, results_directory, tests_directory

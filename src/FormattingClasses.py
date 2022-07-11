@@ -360,73 +360,76 @@ class DataSet:
         # self.data_record[group] is keyed by tests
         # self.data_record[group][test] is keyed by one of (area, force_max, init_slope, wavelength)
 
-        ## Data Means
-        #self.area_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-        #self.force_max_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-        #self.init_slope_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-        #self.wavelength_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
-
-        ## Data STDevs
-        #self.area_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-        #self.force_max_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-        #self.init_slope_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-        #self.wavelength_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
-
         # Data Means
-        self.area_mean_arr = {}
-        self.force_max_mean_arr = {}
-        self.init_slope_mean_arr = {}
-        self.wavelength_mean_arr = {}
+        self.area_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.force_max_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.init_slope_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.wavelength_mean_arr = np.zeros(shape=(num_groups, max_num_tests))
 
         # Data STDevs
-        self.area_stdev_arr = {}
-        self.force_max_stdev_arr = {}
-        self.init_slope_stdev_arr = {}
-        self.wavelength_stdev_arr = {}
+        self.area_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.force_max_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.init_slope_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
+        self.wavelength_stdev_arr = np.zeros(shape=(num_groups, max_num_tests))
 
-    def addRow(self, ind):
-        self.area_mean_arr[ind] = {}
-        self.area_stdev_arr[ind] = {}
-        self.force_max_mean_arr[ind] = {}
-        self.force_max_stdev_arr[ind] = {}
-        self.init_slope_mean_arr[ind] = {}
-        self.init_slope_stdev_arr[ind] = {}
-        self.wavelength_mean_arr[ind] = {}
-        self.wavelength_stdev_arr[ind] = {}
-
-    def addCol(self, ind):
-        self.area_mean_arr[ind[0]][ind[1]] = None
-        self.area_stdev_arr[ind[0]][ind[1]] = None
-        self.force_max_mean_arr[ind[0]][ind[1]] = None
-        self.force_max_stdev_arr[ind[0]][ind[1]] = None
-        self.init_slope_mean_arr[ind[0]][ind[1]] = None
-        self.init_slope_stdev_arr[ind[0]][ind[1]] = None
-        self.wavelength_mean_arr[ind[0]][ind[1]] = None
-        self.wavelength_stdev_arr[ind[0]][ind[1]] = None
+        #  # Data Means
+        #  self.area_mean_arr = {}
+        #  self.force_max_mean_arr = {}
+        #  self.init_slope_mean_arr = {}
+        #  self.wavelength_mean_arr = {}
+        #
+        #  # Data STDevs
+        #  self.area_stdev_arr = {}
+        #  self.force_max_stdev_arr = {}
+        #  self.init_slope_stdev_arr = {}
+        #  self.wavelength_stdev_arr = {}
 
     def delRow(self, ind):
+        self.area_mean_arr = self.area_mean_arr.tolist()
         del self.area_mean_arr[ind[0]][ind[1]]
+        self.area_mean_arr = np.array(self.area_mean_arr)
+
+        self.area_stdev_arr = self.area_stdev_arr.tolist()
         del self.area_stdev_arr[ind[0]][ind[1]]
+        self.area_stdev_arr = np.array(self.area_stdev_arr)
+
+        self.force_max_mean_arr = self.force_max_mean_arr.tolist()
         del self.force_max_mean_arr[ind[0]][ind[1]]
+        self.force_max_mean_arr = np.array(self.force_max_mean_arr)
+
+        self.force_max_stdev_arr = self.force_max_stdev_arr.tolist()
         del self.force_max_stdev_arr[ind[0]][ind[1]]
+        self.force_max_stdev_arr = np.array(self.force_max_stdev_arr)
+
+        self.init_slope_mean_arr = self.init_slope_mean_arr.tolist()
         del self.init_slope_mean_arr[ind[0]][ind[1]]
+        self.init_slope_mean_arr = np.array(self.init_slope_mean_arr)
+
+        self.init_slope_stdev_arr = self.init_slope_stdev_arr.tolist()
         del self.init_slope_stdev_arr[ind[0]][ind[1]]
+        self.init_slope_stdev_arr = np.array(self.init_slope_stdev_arr)
+
+        self.wavelength_mean_arr = self.wavelength_mean_arr.tolist()
         del self.wavelength_mean_arr[ind[0]][ind[1]]
+        self.wavelength_mean_arr = np.array(self.wavelength_mean_arr)
+
+        self.wavelength_stdev_arr = self.wavelength_stdev_arr.tolist()
         del self.wavelength_stdev_arr[ind[0]][ind[1]]
+        self.wavelength_stdev_arr = np.array(self.wavelength_stdev_arr)
 
     def calculateStats(self, test, i):
 
-        self.area_mean_arr[i[0]][i[1]] = stats.mean(test.area_arr.values())
-        self.area_stdev_arr[i[0]][i[1]] = stats.stdev(test.area_arr.values())
+        self.area_mean_arr[i] = stats.mean(test.area_arr.values())
+        self.area_stdev_arr[i] = stats.stdev(test.area_arr.values())
 
-        self.force_max_mean_arr[i[0]][i[1]] = stats.mean(test.force_max_arr.values())
-        self.force_max_stdev_arr[i[0]][i[1]] = stats.stdev(test.force_max_arr.values())
+        self.force_max_mean_arr[i] = stats.mean(test.force_max_arr.values())
+        self.force_max_stdev_arr[i] = stats.stdev(test.force_max_arr.values())
 
-        self.init_slope_mean_arr[i[0]][i[1]] = stats.mean(test.init_slope_arr.values())
-        self.init_slope_stdev_arr[i[0]][i[1]] = stats.stdev(test.init_slope_arr.values())
+        self.init_slope_mean_arr[i] = stats.mean(test.init_slope_arr.values())
+        self.init_slope_stdev_arr[i] = stats.stdev(test.init_slope_arr.values())
 
-        self.wavelength_mean_arr[i[0]][i[1]] = stats.mean(test.wavelength_arr.values())
-        self.wavelength_stdev_arr[i[0]][i[1]] = stats.stdev(test.wavelength_arr.values())
+        self.wavelength_mean_arr[i] = stats.mean(test.wavelength_arr.values())
+        self.wavelength_stdev_arr[i] = stats.stdev(test.wavelength_arr.values())
 
     def plotAllRawData(self, group, settings):
 
@@ -481,14 +484,14 @@ class DataSet:
                 min_max_vals = (settings["MEAN-LENGTH-MIN"], settings["MEAN-LENGTH-MAX"])
 
             max_len = 0
-            for datum in init_data.values():
+            for datum in init_data:
                 max_len = max(max_len, len(datum))
 
             data_dict = {}
 
-            for i, datum in enumerate(list(init_data.values())):
+            for i, datum in enumerate(init_data):
                 temp = [0 for _ in range(max_len)]
-                for j, d in enumerate(list(datum.values())):
+                for j, d in enumerate(datum):
                     temp[j] = d
                 data_dict[group_list[i]] = temp
 
