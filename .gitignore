@@ -1,0 +1,14 @@
+# Keep the .gitignore, no other dotted files
+.*
+!.gitignore
+
+# Keep only .py and .txt files in src/
+!src/*.py
+!src/*.txt
+src/*
+
+# Nothing in the venv directory
+Medtronic-Venv/*
+
+# No zipped versions
+*.zip
